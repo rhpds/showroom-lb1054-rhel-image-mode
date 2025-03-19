@@ -1,0 +1,265 @@
+= Rolling back bootc systems
+
+In this lab, you'll look at rollbacks and examine how bootc handles directories on updates.
+
+[#rollback-vm]
+== Rolling back changes to the virtual machine
+[NOTE] 
+====
+You should still be logged into the bootc VM (the prompt should look like `[lab@qcow-vm ~]$`), if not log back in now.
+[source,bash]
+----
+ssh lab-user@qcow-vm
+----
+====
+
+We have a new built-in option available to image mode systems that typically takes more preparation with package mode 
+operations: the rollback. 
+
+Since `bootc` manages state on disk, we have the previous working system available to us. Normally, we'd need to have set up snapshots 
+or refer to a backup but `bootc` automatically provides us the rollback built in.
+
+Let's check for an available rollback option to get us back to the previous image.
+[source,bash]
+----
+sudo bootc status
+----
+[source,yaml]
+----
+apiVersion: org.containers.bootc/v1alpha1
+kind: BootcHost
+metadata:
+  name: host
+spec:
+  image:
+    image: summit.registry/lb1506:bootc
+    transport: registry
+  bootOrder: default
+status:
+  staged: null <2>
+  booted: <1>
+    image:
+      image:
+        image: summit.registry/lb1506:bootc
+        transport: registry
+      version: 9.20240714.0
+      timestamp: null
+      imageDigest: sha256:681f5f1b99985281f4fec2a0febc0ba1648aa6c91dc0f4f99c0ea1599edda8d7
+    cachedUpdate: null
+    incompatible: false
+    pinned: false
+    ostree:
+      checksum: 3839bd1c5fa58d08beb28b55c275e4ca881c6fd866fb56856f525efa45f0ba6f
+      deploySerial: 0
+  rollback: <3>
+    image:
+      image:
+        image: summit.registry/lb1506:bootc
+        transport: registry
+      version: 9.20240714.0
+      timestamp: null
+      imageDigest: sha256:9b49d2186c0e52142d0bc5ebace934420ba5108320c37ad985c423720fc69f29
+    cachedUpdate:
+      image:
+        image: summit.registry/lb1506:bootc
+        transport: registry
+      version: 9.20240714.0
+      timestamp: null
+      imageDigest: sha256:681f5f1b99985281f4fec2a0febc0ba1648aa6c91dc0f4f99c0ea1599edda8d7
+    incompatible: false
+    pinned: false
+    ostree:
+      checksum: 2d9ba2dbc14ea10d7c860bedafb19736e9d2f3a068f31f4545e5096a0369304e
+      deploySerial: 0
+  rollbackQueued: false <4>
+  type: bootcHost
+----
+
+Looking at the status output, we can see there's a section marked `rollback`. There are at most 3 images 
+available on disk at any one time: 
+
+<1> the currently active image (`booted`)
+<2> the image that will be actived next (`staged`) 
+<3> the fallback image that we're be looking for here (`rollback`). 
+<4> there's no currently queued rollback actions
+
+Not all of these sections will have information at all times.
+
+Rollbacks are as simple as running one command. Let's get this image back to the previous
+state then we can dig into what happened.
+
+[source,bash]
+----
+sudo bootc rollback
+----
+
+The command should return very fast and the output looks like this:
+
+....
+bootfs is sufficient for calculated new size: 0 bytes
+Next boot: rollback deployment
+....
+
+[source,bash]
+----
+sudo bootc status | grep Queued
+----
+
+You should see the value of `rollbackQueued` has been updated as well. This can be useful to check before restarting a sysytem.
+
+....
+  rollbackQueued: true
+....
+
+You can also check the boot order in the `spec` block to see what has been sent to the bootloader.
+
+[source,bash]
+----
+sudo bootc status | grep Order
+----
+
+....
+  bootOrder: rollback
+....
+
+After the reboot, the `rollback` image will become the booted image, and will also become the new default in the boot order.
+
+As usual, a reboot is needed to apply changes. Before doing so, please make sure you are logged in to the
+virtual machine and not the hypervisor (the prompt should look like `[lab@qcow-vm ~]$`):
+
+[source,bash]
+----
+sudo systemctl reboot
+----
+
+[#directory-layout]
+== How image mode handles directories
+
+On the lab host, we're going to make some changes to the Containerfile to account for how
+directories are managed by `bootc`.
+
+In an image mode system, `bootc` manages available images on disk for updates and rollbacks. 
+You just created an update, applied it, then returned to a previous version all through `bootc`.
+Behind the scenes, `bootc` handles the following directories differently, which is what allows
+for the seamless update and rollback experience. 
+
+  * `/usr` -> image state, contents of the image will be extracted and overwrite local files
+  * `/etc` -> local configuration state, contents of the image are merged with a preference for local files
+  * `/var` -> local state, contents of the image will be ignored after the inital installation of any image
+
+The configuration files we added to `/etc` showed up after the update as a result of the merge treatment of bootc.
+If we'd made local changes that conflicted, we'd see the local changes rather than the new configs.
+
+Our initial web page went in `/var` which means after it was unpacked from the original image, `bootc`
+treated it as local machine state. So the change in the Containerfile wasn't applied to the running host. 
+Since we want to control everything about our webserver from the image, we'll need to make some changes 
+to where we put content and how we serve it in Apache.
+
+[source,dockerfile]
+----
+FROM registry.redhat.io/rhel9/rhel-bootc:9.4
+
+COPY certs/004-summit.conf /etc/containers/registries.conf.d/004-summit.conf
+
+ADD etc/ /etc
+
+RUN dnf install -y httpd
+
+RUN <<EOF #<1>
+    mv /var/www /usr/share/www
+    sed -i 's-/var/www-/usr/share/www-' /etc/httpd/conf/httpd.conf
+EOF
+
+RUN echo "Hello Red Hat Summit Connect 2024!!" > /usr/share/www/html/index.html
+
+RUN systemctl enable httpd.service
+----
+<1> Added line to run several commands using the heredoc format
+
+Let's break down that new `RUN` directive.
+
+The `httpd` package drops content in `/var/www` by default, and on bootc systems
+`/var` is machine local. For this example, we want to control web content in the image, 
+we need to move it to somewhere under `bootc` control. In our Containerfile, we move 
+the default package contents to a new location in `/usr` then update the Apache 
+configuration to serve pages from this new directory. We've also changed the echo line 
+to create the index.html in the new location.
+
+Rebuild the image with our new configuration and index page. Since this is a rebuild, podman will reuse the 
+existing layers if there are no changes. This makes updates faster and take less space. Notice the push to the registry also 
+only pushes those layers that contain changes.
+
+[source,bash]
+----
+podman build --file Containerfile --tag summit.registry/lb1506:bootc
+----
+
+And make sure to push it to the registry:
+
+[source,bash]
+----
+podman push summit.registry/lb1506:bootc
+----
+[#update2-vm]
+== Updating the virtual machine
+
+Now you can ssh into the virtual machine
+
+[source,bash]
+----
+ssh lab-user@qcow-vm
+----
+
+Previously, we checked for an update, downloaded and staged it locally to be activated, then manually rebooted 
+the system to have the update take effect. This is a very good procedure for a manual update or in places 
+where we need to schedule any outages ahead of time, say during a maintenance window. We can do this all at 
+once by adding a flag to the `update` command. This gives us a way to automate the process, like with a systemd
+timer. Image mode hosts ship with this timer by default.
+
+
+[source,bash]
+----
+systemctl list-timers bootc-fetch-apply-updates.timer
+----
+....
+NEXT                   LEFT          LAST PASSED UNIT                   ACTIVATES             
+Wed 2024-07-24 16:13:… 1h 44min left -    -      bootc-fetch-apply-upd… bootc-fetch-apply-upd…
+
+1 timers listed.
+Pass --all to see loaded but inactive timers, too.
+....
+
+Instead of waiting for this timer to trigger, we can immediately apply the new update and reboot.
+
+[source,bash]
+----
+sudo bootc update --apply
+----
+
+Remember that the update will detail what layers are new, removed, or added.
+
+----
+Loading usr/lib/ostree/prepare-root.conf
+Queued for next boot: summit.registry/lb1506:bootc-auth
+  Version: 9.20240714.0
+  Digest: sha256:07eb42017b20ef5f33945014d0be92b077cb4890a97a5def117a745567cbd3f1
+Total new layers: 72    Size: 972.0 MB
+Removed layers:   3     Size: 127.2 MB
+Added layers:     5     Size: 127.2 MB
+Rebooting system
+
+Connection to qcow-vm closed by remote host.
+Connection to qcow-vm closed.
+----
+
+[#testing]
+== Testing the changes
+
+We can check for our new web page from the lab host (`[lab-user@hypervisor rh-summit-2024-lb1506]$`):
+
+[source,console]
+----
+curl http://qcow-vm
+----
+
+Now the output should be "Hello Red Hat Summit Connect 2024!!"
