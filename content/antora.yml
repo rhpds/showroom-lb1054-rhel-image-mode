@@ -1,5 +1,5 @@
 name: modules
-title: Default Title
+title: "LB1054: Unleashing the power of image mode for RHEL"
 version: master
 nav:
   - modules/ROOT/nav.adoc
