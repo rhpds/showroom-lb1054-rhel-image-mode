@@ -1,0 +1,101 @@
+= Creating an inner loop for system design
+In this exercise, you'll look at how to test without needing to deploy the image to a host.
+
+NOTE: You should on the lab host (the prompt should look like `[lab-user@hypervisor rh-summit-2024-lb1506]$``), if not log out of the VM now.
+
+
+Being able to make changes, build, and run an application locally is part of what is called
+the 'inner loop' of application development. Containers had a big impact on making local 
+development and production run time look and feel identical, improving the inner loop for developers. 
+One advantages of image mode, the use of standard container tools brings this 'inner loop' capability 
+to the design and development of standard operating system builds. 
+
+While not every nuance of system behavior can be tested this way (eg SELinux polices), this still 
+can greatly reduce the amount of time usually needed to test changes to configurations, software installations, etc.
+
+[#test]
+== Testing a bootc image as a container
+
+You can launch this bootc container like any other application container, `podman` will
+start `systemd` by default. Using `--detach` will help ensure that `systemd` is PID1 and 
+the bootc image will initialize as intended when running as a host.
+
+[source,bash]
+----
+podman run --rm --name http-test --detach --publish 80:80 summit.registry/lb1506:bootc
+----
+
+Test that it is running:
+
+[source,bash]
+----
+podman ps | grep http-test
+----
+
+The output of the command above should resemble:
+
+----
+06a7bdb1950b  summit.registry/lb1506:latest    15 seconds ago  Up 16 seconds  0.0.0.0:80->80/tcp    http-test
+----
+
+We exposed a port from the container on the lab host, so we can test the web server.
+
+[source,bash]
+----
+curl http://localhost/
+----
+
+The result of the command above should be the latest index.html we created.
+
+----
+Hello Red Hat Summit Connect 2024!!
+----
+
+Before we attach to an interactive shell in the running container, let's get the kernel command line from the 
+lab host.
+
+[source,bash]
+----
+cat /proc/cmdline
+----
+....
+BOOT_IMAGE=/boot/vmlinuz root=UUID=60d0e5e3-7217-4c34-b8e0-fd3d9abf0654 ro console=tty0 console=ttyS1,115200n8 biosdevname=0 net.naming-scheme=rhel-9.3 net.ifnames=1 modprobe.blacklist=igb modprobe.blacklist=rndis_host
+....
+
+Now we can get our shell in the running container.
+[source,bash]
+----
+podman exec -it  http-test /bin/bash
+----
+....
+bash-5.1# 
+....
+
+Let's look at kernel command line as well as PID1 in the `/proc` filesystem and see what runtime info we have.
+
+[source,bash]
+----
+cat /proc/cmdline # <1>
+cat /proc/1/cgroup # <2>
+cat /proc/1/attr/current # <3>
+----
+
+We can see the kernel command line is taken from the lab host since there's no running kernel in a container, systemd is running 
+as the init system from the cgroup hierarchy but a different SELinux context. Remember that systemd is run as PID1 by default 
+when a bootc image is run as a container, but since it wasn't booted as a host, none of the first boot preparation will be executed.
+
+<1> `BOOT_IMAGE=/boot/vmlinuz root=UUID=60d0e5e3-7217-4c34-b8e0-fd3d9abf0654 ro console=tty0 console=ttyS1,115200n8 biosdevname=0 net.naming-scheme=rhel-9.3 net.ifnames=1 modprobe.blacklist=igb modprobe.blacklist=rndis_host`
+<2> `0::/init.scope`
+<3> `system_u:system_r:container_init_t:s0:c472,c516`
+
+You can use this container to experiment with changes, understand dependecies that new software might bring, check that services can be 
+started, and more. While issues we introduced in the switch exercise may not be discovered here, there is still a lot that can be done 
+to speed creation and testing of new operating system builds.
+
+Once you're done testing, go ahead and exit the shell, and stop the running container on the host:
+
+[source,bash]
+----
+exit
+podman stop http-test
+----

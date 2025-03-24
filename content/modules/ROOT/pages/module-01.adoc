@@ -1,149 +1,96 @@
-= Building an Application with rpms
+= System setup
 
-== Downloading the UBI
+WARNING: All of these steps should be accomplished via lab setup and this page will be removed
 
-In this lab, you will be installing software into the container 
-image running as an interactive application. To do this you will
-need `yum`, but do not need `systemd` for managing services within the
-container environment.  For that reason, you will be using the *Standard*
-UBI image (as opposed to the Minimal or Multi-service images).
+TIP: This workshop uses blocks which contain runnable commands and represent output. The blocks marked with `bash`, `dockerfile`, etc 
+in the upper right corner can be copied and pasted into a terminal window instead of being typed. This is provided as a convenience.
+In this lab, you will be cloning the lab helper scripts and preparing
+the host, as well as setting up the required access for Red Hat resources.
 
-Using the "buildah from" command will download and meld the container image. This particular image we are using is the Red Hat Universal Base Image or UBI. From the ourput of the command, you will notice that we are pulling down the latest one, which is for RHEL 9. 
 
-. Execute the  download the Standard UBI
-image from Red Hat's registry.
-
-+
-[source,sh,role=execute]
-----
-buildah from registry.access.redhat.com/ubi9/ubi
-----
-
-[#repositories]
+[#repo]
 == Installing Repositories
-In this lab, you are going to containerize a software package that is already
-packaged in RPM format and stored in the Extra Packages for Enterprise Linux
-(EPEL) repository.
 
-Software often has requirements for prerequisite software that must be installed
-on the machine for it to work properly.  `yum` will resolve those
-dependencies for you, as long as it can locate the required packages in
-repositories defined on the machine.  The Red Hat Universal Base Image (UBI)
-downloaded in the previous step has access to some Red Hat Enterprise Linux
-repositories.  However, the target package for the lab is from EPEL.  
+First, let's start by cloning the helper scripts.
 
-. In the command below, `buildah` is going to run a command on the
-`ubi-working-container` image.  The `--` indicates that the command should be
-executed from within the container, which means the results will be applied into
-the container image.  Lastly, you are providing the `yum` command to install a
-package that defines all of the repositories from EPEL, `epel-release-latest-9`.
-
-+
 [source,bash]
 ----
-buildah run ubi-working-container -- yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+git clone https://github.com/nzwulfin/rh-summit-2024-lb1506
 ----
 
+...and changing our directory to the newly created one:
 
-. You can verify that the above command did not install the RPM on the host system.
-
-+
 [source,bash]
 ----
-rpm -q epel-release
+cd rh-summit-2024-lb1506
 ----
 
-NOTE: If your repository configurations are not distributed as an RPM, but instead as
-individual `.repo` files, you could use the `buildah copy` command to copy
-files from the host operating system into the container image.  You will see
-an example of using `buildah copy` later in this lab.
+[#login]
+== Red Hat registry login
 
-[#software]
-== Installing Software
+In order to use the base Red Hat Enterprise Linux container images, you need to
+login to Red Hat's image container registry by using your Red Hat account
+credentials. If you don't have a Red Hat account or are concerned about using
+your credentials on a public network, feel free to create a new personal account
+that povides you with a no-cost
+https://developers.redhat.com/articles/faqs-no-cost-red-hat-enterprise-linux#general[Red Hat Developer Subscription].
 
-
-. Now that the yum repositories are defined within the container, execute 
-another `yum install`, within the container, to install the target
-software: `moon-buggy`.
-
-+
 [source,bash]
 ----
-buildah run ubi-working-container -- yum -y install moon-buggy
+podman login registry.redhat.io
 ----
 
+You will be asked for a username (this is typically the email address associated with your account) and
+a password.
 
-== Committing the Container Image
+[#high-level]
+== Preparing the host for container building
 
-. At this point, the container is configured.  It is time to transition from a
-working container into a committed image.  In the command below, you will use
-the `buildah` command to commit the working container to an image called:
-`moon-buggy`.
+In this final part of the setup, you will:
 
-+
+  * setup the hypervisor for running virtual machines
+  * generate a local ssh key
+  * run a local container image registry
+  * download all the required container images
+
+Don't worry if this sounds like a lot, there is a script to do it all for you:
+
 [source,bash]
 ----
-buildah commit ubi-working-container moon-buggy
+make setup
 ----
 
-+
-. The output of `podman image list` should confirm the image was created.
+[#status]
+== Checking the setup
 
-+
+One final check before you advance to the next lab.
+
 [source,bash]
 ----
-podman image list
+make status
 ----
 
+The output from the command above should be similar to the following:
 
-== Deploy the Container
+....
+git status
+On branch master
+Your branch is up to date with 'origin/master'.
 
-Now the software has been installed and a new container image created.  It is
-time to spawn a runtime of the container image and validate the software.  The
-software we are using is a command line command.  
+nothing to commit, working tree clean
+podman login --get-login registry.redhat.io
+cgament@redhat.com
+podman image exists "registry.redhat.io/rhel9/rhel-bootc:9.4"
+podman image exists "quay.io/centos-bootc/bootc-image-builder:latest"
+podman image exists registry.access.redhat.com/ubi9/ubi-minimal
+podman image exists registry.access.redhat.com/ubi9/ubi
+podman image exists quay.io/kwozyman/toolbox:httpd
+podman image exists quay.io/kwozyman/toolbox:registry
+     Active: active (running) since Wed 2024-05-01 17:13:37 EDT; 55s ago
+ Id   Name   State
+--------------------
 
-. When you `run` the container,
-it will be in interactive (`-it`) mode, based on the `moon-buggy` container
-image and the command run interactively will be `/usr/bin/moon-buggy`.
-
-+
-[source,bash]
-----
-podman run -it moon-buggy /usr/bin/moon-buggy
-----
-
-+
-[source,textinfo]
-----
-
-<<< OUTPUT ABRIDGED >>>
-               MM     MM   OOOOO    OOOOO   NN     N
-               M M   M M  O     O  O     O  N N    N
-               M  M M  M  O     O  O     O  N  N   N
-               M   M   M  O     O  O     O  N   N  N
-               M       M  O     O  O     O  N    N N
-               M       M   OOOOO    OOOOO   N     NN
-
-                     BBBBBB   U     U   GGGGG    GGGGG   Y     Y
-                     B     B  U     U  G     G  G     G   Y   Y
-                     BBBBBB   U     U  G        G          Y Y
-                     B     B  U     U  G   GGG  G   GGG     Y
-                     B     B  U     U  G     G  G     G    Y
-                     BBBBBB    UUUUU    GGGGG    GGGGG   YY
-
-<<< OUTPUT ABRIDGED >>>
-----
-
-. You can now play the Moon Buggy game, which is a text-based version of the
-popular Moon Patrol.  When you are finished, use the `q` command to quit the
-game, which will terminate the container.
-
-+
-Alternatively, you can use `podman` to kill the running container from
-*Terminal 2*.
-
-+
-[source,bash]
-----
-podman kill $(podman ps | grep -v CONTAINER | cut -f1 -d" " )
-----
+net.ipv4.ip_unprivileged_port_start = 80
+ID            NAME             CPU %       MEM USAGE / LIMIT  MEM %       NET IO            BLOCK IO    PIDS        CPU TIME    AVG CPU %
+fa77d569b19f  summit-registry  0.05%       17.9MB / 67.3GB    0.03%       3.88kB / 1.888kB  0B / 0B     20          18.923277s  0.05%
+....
