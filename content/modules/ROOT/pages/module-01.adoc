@@ -1,96 +1,15 @@
 = System setup
 
-WARNING: All of these steps should be accomplished via lab setup and this page will be removed
+In this lab, you will interact with a total of 3 systems: the primary lab hypervisor, a container registry, and an image mode VM.  Most of your work will be done on the lab hypervisor, and you will create the target image mode VM as part of the exercises. Caution should be taken when instructed to reboot a system that you are on the correct host.
 
-TIP: This workshop uses blocks which contain runnable commands and represent output. The blocks marked with `bash`, `dockerfile`, etc 
-in the upper right corner can be copied and pasted into a terminal window instead of being typed. This is provided as a convenience.
-In this lab, you will be cloning the lab helper scripts and preparing
-the host, as well as setting up the required access for Red Hat resources.
+== Lab diagram
 
+* Draw something functional build host, container storage, image consumer maybe include how they'll interact with each protocol wise (ssh, https)*
 
-[#repo]
-== Installing Repositories
+== System purpose
 
-First, let's start by cloning the helper scripts.
+*Container build host*: One of the main parts of this lab is the build environment. The primary lab machine serves as a basic container build environment. The RHEL container tools (podman, buildah, skopeo) will be used throughout this lab to do simple container creation. This is all that is needed for a basic build host. You will also create the Containerfiles and any other needed configuration files on this host.
 
-[source,bash]
-----
-git clone https://github.com/nzwulfin/rh-summit-2024-lb1506
-----
+*Container registry*: The registry in this lab environment is a basic registry with no authentication or management tooling. More tools, workflows, and insights are available from more modern registry solutions like quay.io. For the purposes of the exercises, a simple registry to host images is all that's needed.
 
-...and changing our directory to the newly created one:
-
-[source,bash]
-----
-cd rh-summit-2024-lb1506
-----
-
-[#login]
-== Red Hat registry login
-
-In order to use the base Red Hat Enterprise Linux container images, you need to
-login to Red Hat's image container registry by using your Red Hat account
-credentials. If you don't have a Red Hat account or are concerned about using
-your credentials on a public network, feel free to create a new personal account
-that povides you with a no-cost
-https://developers.redhat.com/articles/faqs-no-cost-red-hat-enterprise-linux#general[Red Hat Developer Subscription].
-
-[source,bash]
-----
-podman login registry.redhat.io
-----
-
-You will be asked for a username (this is typically the email address associated with your account) and
-a password.
-
-[#high-level]
-== Preparing the host for container building
-
-In this final part of the setup, you will:
-
-  * setup the hypervisor for running virtual machines
-  * generate a local ssh key
-  * run a local container image registry
-  * download all the required container images
-
-Don't worry if this sounds like a lot, there is a script to do it all for you:
-
-[source,bash]
-----
-make setup
-----
-
-[#status]
-== Checking the setup
-
-One final check before you advance to the next lab.
-
-[source,bash]
-----
-make status
-----
-
-The output from the command above should be similar to the following:
-
-....
-git status
-On branch master
-Your branch is up to date with 'origin/master'.
-
-nothing to commit, working tree clean
-podman login --get-login registry.redhat.io
-cgament@redhat.com
-podman image exists "registry.redhat.io/rhel9/rhel-bootc:9.4"
-podman image exists "quay.io/centos-bootc/bootc-image-builder:latest"
-podman image exists registry.access.redhat.com/ubi9/ubi-minimal
-podman image exists registry.access.redhat.com/ubi9/ubi
-podman image exists quay.io/kwozyman/toolbox:httpd
-podman image exists quay.io/kwozyman/toolbox:registry
-     Active: active (running) since Wed 2024-05-01 17:13:37 EDT; 55s ago
- Id   Name   State
---------------------
-
-net.ipv4.ip_unprivileged_port_start = 80
-ID            NAME             CPU %       MEM USAGE / LIMIT  MEM %       NET IO            BLOCK IO    PIDS        CPU TIME    AVG CPU %
-fa77d569b19f  summit-registry  0.05%       17.9MB / 67.3GB    0.03%       3.88kB / 1.888kB  0B / 0B     20          18.923277s  0.05%
-....
+*Target host*: A KVM based virtual machine will be created during an exercise to serve as an install location for the image mode system. Any cloud, virtual, or bare metal machine can be used in practice. This lab won't go into detail on local management of KVM, but will use virt-install and virsh to manage the local VM.

@@ -10,8 +10,8 @@ execute both.
 == Create the config for building the virtual machine image
 
 To deploy our bootc image as a host, we need to get the contents of the image onto a disk. While `bootc` 
-handles those mechanics, the actual creation of a phyiscal disk, virtual disk, or cloud image are handled 
-by other standard tools. For example, Anaconda can be used with bootc images for phyiscal or virtual hosts 
+handles those mechanics, the actual creation of a physical disk, virtual disk, or cloud image are handled 
+by other standard tools. For example, Anaconda can be used with bootc images for physical or virtual hosts 
 like you would today, but without the `%packages` block we use today. In this lab, we'll use the `bootc-image-builder` 
 tool which can create various different disk image types and call `bootc` to deploy the image contents.
 
@@ -25,8 +25,7 @@ users and authentication is likely to be handled at the deployment stage, not th
 NOTE: There are cases where it may be useful for a user and credentials to be added to an image, 
 as a 'break glass' emergency login for example.
 
-To add a user during the conversion to a disk image, you need to create a JSON file with the credentials.
-This config file will be used by `bootc-image-builder` to customize the final disk image.
+To add a user during the conversion to a disk image, you need add the credentials to the config file used by `bootc-image-builder` to create the final disk image.
 
 A ssh key has been generated in the Setup section of this lab. You can view the public part like this:
 
@@ -94,25 +93,27 @@ To convert from an OCI image to a disk image, we have a special version of image
 Try to generate the image now:
 
 NOTE: This could take 2+ minutes to complete.
+
 [source,bash]
 ----
 sudo podman run --rm --privileged \
-        --volume .:/output \
-        --volume ./config-qcow2.json:/config.json \
-        registry.redhat.io/rhel9/bootc-image-builder:latest \
-        --type qcow2 --config /config.json \
-        --tls-verify=false \
-        summit.registry/lb1506:bootc
+  --security-opt label=type:unconfined_t \
+  --volume .:/output \
+  --volume ./config-qcow2.toml:/config.toml \
+  --volume /var/lib/containers/storage:/var/lib/containers/storage \
+  registry.redhat.io/rhel9/bootc-image-builder:latest \
+  --type qcow2 \
+  summit.registry/lb1506:bootc
 ----
 
-A brief explanation of the arguments used for `podman` and `bootc-image-buider`:
+A brief explanation of the arguments used for `podman` and `bootc-image-builder`:
 
   * `--rm` -> do not keep the build container after execution finishes
   * `--privileged` -> add capabilities required to build the image
   * `--volume` -> podman will map these local directories or files to the container
   * `registry.redhat.io/rhel9/bootc-image-builder:latest` -> the image builder container image
 
-From here, these arguments passed to `bootc-image-builder`
+After the image builder version, these arguments passed to `bootc-image-builder`:
 
   * `--type qcow2` -> the type of image to build
   * `--config /config.json` -> the json configuration file used; please note this is relative to the container volume we added
@@ -137,8 +138,8 @@ The output should be similar to:
 [#create-vm]
 == Create the virtual machine
 
-The creation of virtual machines is out of scope for this lab, so we have provided a convenience command in the Makeile.
-We've detailed the commnds being run so you can follow along with what is happening. If you like, feel free to run the 
+The creation of virtual machines is out of scope for this lab, so we have provided a convenience command in the Makefile.
+We've detailed the commands being run so you can follow along with what is happening. If you like, feel free to run the 
 commands on your own instead of using the `make` target. The core of the `virt-install` command used is `--import` which 
 skips the install process and creates the VM based on the provided disk image.
 
