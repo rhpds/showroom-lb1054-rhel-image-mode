@@ -16,7 +16,7 @@ directory.
 
 Instead of just running a webserver, what if we needed to run WordPress instances, and our developers need
 those to be containerized? Image mode hosts are suitable for a wide range of use cases beyond directly hosting 
-applications, and acting as a container host is one of those. In fact, the work that preceeded image mode was 
+applications, and acting as a container host is one of those. In fact, the work that preceded image mode was 
 largely focused on the role of container hosting. 
 
 On the host system (make sure the prompt shows `[lab-user@hypervisor rh-summit-2024-lb1506]$`), you can

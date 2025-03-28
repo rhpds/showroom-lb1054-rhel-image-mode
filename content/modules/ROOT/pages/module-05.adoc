@@ -79,7 +79,7 @@ Looking at the status output, we can see there's a section marked `rollback`. Th
 available on disk at any one time: 
 
 <1> the currently active image (`booted`)
-<2> the image that will be actived next (`staged`) 
+<2> the image that will be activated next (`staged`) 
 <3> the fallback image that we're be looking for here (`rollback`). 
 <4> there's no currently queued rollback actions
 

@@ -1,4 +1,4 @@
-= Build a bootc container image
+= Build a bootc image
 In this step you will transform an application container to a bootc image.
 
 [#write]
@@ -31,7 +31,7 @@ A brief explanation of the key directives in the Containerfile above:
   * `FROM` -> the base container image
   * `ENTRYPOINT` -> the command that will be executed by default at run time
 
-You can now replace the contents as follows:
+To convert this defintion to create a bootc image insted of an application container, you can make the following changes to the file:
 
 [source,dockerfile]
 ----
@@ -69,21 +69,24 @@ Let's talk about the effects of these changes:
 
 As with application containers, you can build this container with standard tools:
 
-  * `--file Containerfile` -> what Containerfile to use for the build
-  * `--tag summit.registry/lb1506:bootc` -> the "tag" or name of the resulting container in the format
-     <registry>/<repository>:<tag>
-
 [source,bash]
 ----
 podman build --file Containerfile --tag summit.registry/lb1506:bootc
 ----
+The arguments we pass to `podman` are:
 
-If the above command is succesful, the last two lines of the output should read like this:
+  * `--file Containerfile` -> what Containerfile to use for the build
+  * `--tag summit.registry/lb1506:bootc` -> the "tag" or name of the resulting container in the format
+     <registry>/<repository>:<tag>
+
+You will see `podman` process each line of the Containerfile just as it would for an application container. Once complete, the last two lines of the output should read like this:
 
 ....
 Successfully tagged summit.registry/lb1506:bootc
 f1bea10eb37acf2e78a9b01c6242110c1901adbaf40dbce479241c6c735c58da
 ....
+
+You have now built your first complete RHEL image as a bootc image!
 
 [#distribute]
 == Distributing the bootc image
