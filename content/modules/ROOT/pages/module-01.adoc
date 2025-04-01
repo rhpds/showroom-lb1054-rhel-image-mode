@@ -1,6 +1,6 @@
 = System setup
 
-In this lab, you will interact with a total of 3 systems: the primary lab hypervisor, a container registry, and an image mode VM.  Most of your work will be done on the lab hypervisor, and you will create the target image mode VM as part of the exercises. Caution should be taken when instructed to reboot a system that you are on the correct host.
+You will interact with a total of 3 systems: the primary lab hypervisor, a container registry, and an image mode VM.  Most of your work will be done on the lab hypervisor, and you will create the target image mode VM as part of the exercises. Caution should be taken when instructed to reboot a system that you are on the correct host.
 
 == Lab diagram
 

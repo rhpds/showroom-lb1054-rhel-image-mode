@@ -1,6 +1,6 @@
 = Deploy a virtual machine with bootc image
 
-In this lab, you will build a `qcow2` disk image from the bootc image and then launch
+In this exercise, you will build a `qcow2` disk image from the bootc image and then launch
 a virtual machine from it. `qcow2` is a standard file format used by the Linux virtualization system.
 
 NOTE: This exercise includes both a make command and the commands executed by that make target. You do not need to 

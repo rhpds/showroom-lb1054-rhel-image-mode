@@ -2,10 +2,8 @@
 
 In the ever-evolving landscape of information technology (IT), containers have emerged as a fundamental component that revolutionizes software development, deployment, and management. These lightweight and portable units encapsulate applications, their dependencies, and even the underlying operating system. However, as containers have become pervasive in IT, operating system customization remains a persistent challenge, both in the context of day two configuration management and during the initial creation of operating system (OS) images.
 
-In this lab you will learn how to apply container techniques and tools to full fledged operating systems. Using standard container practices to build and distribute full OS images expands the current realms of OS design to new audiences and new tools. 
+In this lab you will learn how to apply container techniques and tools to full fledged operating systems. Using standard container practices to build and distribute full OS images expands the current realm of OS design to new audiences and new tools. To accomplish this, you will learn how to create, update, and maintain an image mode for RHEL system!
 
-Combined with an OS that can operate in an atomic, image based manner, updates and rollbacks become fast, safe, and carry less risk. Simple A/B deployments from centralized repositories give new ways to think about the OS across your estate. Improved traceability improves drift control and consistency in any target environment.
+Combined with an OS that can operate in an atomic, image based manner, updates and rollbacks become fast, safe, and carry less risk. Simple A/B deployments from centralized repositories give new ways to think about the OS across  entire infrastructure. With improvements to traceability, this will improve drift control and consistency in any target environment. 
 
-Image mode for RHEL also provides new ways for teams to collaborate on and make use of the standard OS building blocks you define for your needs. 
-
-In this lab, you'll get hands on with the basic mechanics of creating, updating, and maintaining an image mode system. 
+Image mode for RHEL provides new ways for teams to collaborate on and make use of the standard operating environments you define for your organization. 

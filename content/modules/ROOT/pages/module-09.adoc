@@ -1,6 +1,6 @@
 = Creating an install iso with Anaconda
 
-In this lab you will learn the basics of deploying a bootc image using Anaconda and an
+In this section you will learn the basics of deploying a bootc image using Anaconda and an
 all in one `iso` image.
 
 Anaconda is the official Red Hat Enterprise Linux installer and it uses Kickstart as it's scripting language.
@@ -11,7 +11,7 @@ Recently, Kickstart received a new command called `ostreecontainer`.
 
 Anaconda is typically used via the boot iso shipped by Red Hat. There are several ways to get a host to boot from this ISO 
 image including PXE or HTTP Boot over the network, as an image via IMPI, or a physical disk inserted into a drive. The kickstart 
-file for an install can also be provided in several ways, including as part of the iso or over a network. For this lab, 
+file for an install can also be provided in several ways, including as part of the iso or over a network. For this section of the lab, 
 we'll focus on creating a boot ISO that includes the kickstart, mainly for local logistics reasons. The configuration of 
 Anaconda via kickstart will be the same, regardless of how they are presented to the host being installed.
 
