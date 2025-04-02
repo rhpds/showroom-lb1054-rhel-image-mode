@@ -1,115 +1,86 @@
 = Creating an install iso with Anaconda
 
-In this lab you will learn the basics of deploying a bootc image using Anaconda and an
+In this section you will learn the basics of deploying a bootc image using Anaconda and an
 all in one `iso` image.
 
 Anaconda is the official Red Hat Enterprise Linux installer and it uses Kickstart as it's scripting language.
 Recently, Kickstart received a new command called `ostreecontainer`.
 
 [#build]
-== Building an installation ISO image with the bootc container
+== Building an installation ISO with the bootc image
 
 Anaconda is typically used via the boot iso shipped by Red Hat. There are several ways to get a host to boot from this ISO 
-image including PXE or HTTP Boot over the network, as an image via IMPI, or a phyiscal disk inserted into a drive. The kickstart 
-file for an install can also be provided in several ways, including as part of the iso or over a network. For this lab, 
+image including PXE or HTTP Boot over the network, as an image via IMPI, or a physical disk inserted into a drive. The kickstart 
+file for an install can also be provided in several ways, including as part of the iso or over a network. For this section of the lab, 
 we'll focus on creating a boot ISO that includes the kickstart, mainly for local logistics reasons. The configuration of 
 Anaconda via kickstart will be the same, regardless of how they are presented to the host being installed.
 
-The starting iso image should have been already downloaded at the setup phase at the beginning of this workshop. You can check it exists
-by listing the file `/var/lib/libvirt/images/summit/rhel-boot.iso` as root:
+To create the ISO with an embedded kickstart, we will use `bootc-image-builder`.
 
-[source,bash]
-----
-sudo ls -lah /var/lib/libvirt/images/summit/rhel-boot.iso
-----
-
-If it is missing, you can redownload it by calling `make iso-download`.
-
-Next, make sure you have pushed the bootc container image to the local registry:
+Make sure you have the bootc image to be installed pushed to the local registry:
 
 ----
 podman push summit.registry/lb1506:bootc
 ----
 
-The actual generation of the custom `iso` image is out of scope for this workshop, so we are providing a make command to do so. This 
-custom ISO will contain not the original boot image, but our kickstart file and the bootc image we want installed on the host. These 
-sort of all in one installers can be very useful for bare metal, especially in places with limited or no network connectivity.
-
-[source,bash]
-----
-make iso CONTAINER=summit.registry/lb1506:bootc
-----
-
-At the end of the run, you should be able to list the file `/var/lib/libvirt/images/summit/rhel-boot-custom.iso` as root:
-
-----
-sudo ls -lah /var/lib/libvirt/images/summit/rhel-boot-custom.iso
-----
-
-*For reference*, the script used to embed and build the custom ISO can be found in `bin/embed-container` and it can
-be replicated with the following steps (*no need to run these commands*):
-
-  1. use `skopeo` to copy the container image to a temporary directory on disk:
-
-+
-----
-skopeo copy "docker://summit.registry/lb1506:bootc" "oci:${TEMPDIR}/container/"
-----
-
-  2. generate a Kickstart file (more details below)
-  3. create the new iso using `mkksiso`
-
-+
-----
-mkksiso --ks local.kickstart --add ${TEMPDIR}/container/ original.iso custom.iso
-----
-
 [#kickstart]
-== Exploring the kickstart file
+== Creating the kickstart file
 
-The Kickstart added to the iso is in `config/local.ks` and looks like this.
-
+The Kickstart added to the iso via a customization block of the `bootc-image-builder` config file. Add the following to `config-iso.toml` and save the file.
 ----
+[customizations.installer.kickstart]
+contents = """
+# Basic setup
 text
-network --bootproto=dhcp --device=link --activate
+
+network --bootproto=dhcp --device=link --activate 
+
+# Basic partitioning
 clearpart --all --initlabel --disklabel=gpt
 reqpart --add-boot
 part / --grow --fstype xfs
 
-ostreecontainer --url=/run/install/repo/container --transport=oci
+# No ostreecontainer command needed, instead we lay down the container contents with BIB in the ISO
 
 firewall --disabled
 services --enabled=sshd
-sshkey --username lab-user "SSHKEY"
-user --name="lab-user" --groups=wheel --plaintext --password=lb1506
-rootpw lb1506
-poweroff
+
+user --name=core --groups=wheel --iscrypted --password=$PASSHASH
+sshkey --username=core "$SSHKEY"
+
+# Only inject a SSH key for root
+rootpw --iscrypted locked
+
+reboot
 ----
 
-The new `ostreecontainer` command replaces the standard %packages block of the kickstart file that defines what RPMs would be installed by Anaconda. 
-This replaces that set of RPM transactions with the `bootc` image to be unpacked and installed to disk.  
+All of  the kickstart is standard fare. Anaconda will create the partitions and filesystems on disk, enable services, and create users just like it would in any other install. You even have access to the `%pre` and `%post` blocks too, the only missing section from any kickstart you have today is the `%packages` list. 
+
+The new `ostreecontainer` command replaces the standard %packages block of the kickstart file that defines what RPMs would be installed by Anaconda. This replaces that set of RPM transactions with the `bootc` image to be unpacked and installed to disk.  
 
   * `--url=/run/install/repo/container` -> path to the local container in the iso but it can also directly take a publicly available registry
   * `--transport=oci` -> the format in which the container is available, in this case `oci`
 
-If you wanted to deploy directly from a container registry, the `ostreecontainer` command would look like this (*no need to run this command*):
+If you wanted to deploy directly from a container registry, the `ostreecontainer` command in a kickstart would look like this (*no need to run this command*):
 
 ----
 ostreecontainer --url=quay.io/myorg/myimage:mytag
 ----
 
-All of the rest of the kickstart is standard fare. Anaconda will create the partitions and filesystems on disk, enable services, and create users 
-just like it would in any other install. You even have access to the `%pre` and `%post` blocks too, the only missing section from any kickstart you 
-have today is the `%packages` list.
+When creating an ISO with an embedded kickstart however, `bootc-image-builder` will automatically inject the correct `ostreecontainer` directive for the image we pass it. The command looks very similar to the one used to create the virtual machine QCOW2 disk in the earlier exercise, with a new output type.
 
-Once you see the following output, you can proceed.
-....
-ISO image produced: 1028128 sectors
-Written to medium : 1028288 sectors at LBA 32
-Writing to '/var/lib/libvirt/images/summit/rhel-boot-custom.iso' completed successfully.
+[source,bash]
+----
+sudo podman run --rm --privileged \
+  --security-opt label=type:unconfined_t \
+  --volume .:/output \
+  --volume ./config-iso.toml:/config.toml \
+  --volume /var/lib/containers/storage:/var/lib/containers/storage \
+  registry.redhat.io/rhel9/bootc-image-builder:latest \
+  --type iso \
+  summit.registry/lb1506:bootc
+----
 
-Done
-....
 
 [#run]
 == Starting the installation with Anaconda in a virtual machine
@@ -344,5 +315,5 @@ registry over a network isn't possible or desired.
 You've now completed all of the exercises in today's workshop.
 
 Image mode for RHEL provides a new way to think about risks involved with updating hosts, creates native rollback functionality, 
-and can quickly and easily change the role of a particular host. We hope you've had a few ideas of how the techiniques and topics 
+and can quickly and easily change the role of a particular host. We hope you've had a few ideas of how the techniques and topics 
 in this workshop could apply to the environments you manage.

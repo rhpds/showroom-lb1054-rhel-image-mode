@@ -1,20 +1,22 @@
-= Build a bootc container image
-In this step you will transform an application container to a bootc image.
+= Build a bootc image
+In this exercise, you will see how to apply application container build concepts to a bootc image.
 
 [#write]
-== Modify the Containerfile
+== Create the Containerfile
 
-NOTE: The `vim` editor is also available. Users of `vim` should already know the basics
-of opening, saving and exiting the editor. The instructions will reflect `nano` commands.
-All of the files used can be found in the `examples` directory.
+[NOTE]
+====
+The instructions will reflect `nano` commands.
 
-Let's start with a typical application container and convert it to an image mode host. We'll start
-with something simple, a basic webserver running on the Red Hat Universal Base Image. To start the editor:
+In `nano`, you can save and exit with `Ctrl+x`, followed by the key `y` at the "Save modified buffer?" prompt 
+and the `Enter` key at the prompt to keep the filename.
 
-[source,bash]
-----
-nano Containerfile
-----
+The `vim` editor is also available. Users of `vim` should already know the basics
+of opening, saving and exiting the editor. 
+====
+
+Let's examine  a typical application container. We'll start
+with something simple, a basic webserver running on the Red Hat Universal Base Image. 
 
 [source,dockerfile]
 ----
@@ -29,15 +31,20 @@ ENTRYPOINT /usr/sbin/httpd -DFOREGROUND
 A brief explanation of the key directives in the Containerfile above:
 
   * `FROM` -> the base container image
-  * `ENTRYPOINT` -> the command that will be executed by default at run time
+  * `RUN` -> commands to be executed during build
+  * `ENTRYPOINT` -> the command that will be executed by the container engine at run time
 
-You can now replace the contents as follows:
+To create this basic webserver as an image mode system instead of an application container, create a Containerfile that contains the directives below.
 
-[source,dockerfile]
+
+[source,bash,role="execute",subs=attributes+]
+----
+ nano Containerfile
+----
+
+[source,dockerfile,role="execute",subs=attributes+]
 ----
 FROM registry.redhat.io/rhel9/rhel-bootc:9.4
-
-COPY certs/004-summit.conf /etc/containers/registries.conf.d/004-summit.conf
 
 RUN dnf install -y httpd
 RUN echo "Hello Red Hat" > /var/www/html/index.html
@@ -45,12 +52,9 @@ RUN echo "Hello Red Hat" > /var/www/html/index.html
 RUN systemctl enable httpd.service
 ----
 
-TIP: In `nano`, you can save and exit with `Ctrl+x`, followed by the key `y` at the "Save modified buffer?" prompt 
-and the `Enter` key at the prompt to keep the filename.
+Let's talk about the effects of these changes from the application container definition:
 
-Let's talk about the effects of these changes:
-
-  * The `FROM` field is now pointing to the Red Hat Enterprise Linux 9.4 bootc image instead of the UBI base image.
+  * The `FROM` field is now pointing to the Red Hat Enterprise Linux 9.4 bootc image instead of the UBI base image.
   This new bootc image is a complete version of RHEL 9.4, much like the KVM image available on the Customer Portal. This 
   image includes all of the OS components to run as a host as well as the new `bootc` commands. It is built using `ostree`
   to facilitate the transactional updates that marks an image mode deployment from a package mode host.
@@ -60,30 +64,29 @@ Let's talk about the effects of these changes:
   need to specify an executable that should be run when the container is started by a container engine like 
   podman. 
 
-  * `COPY certs/004-summit.conf...` copies a single file from our helper directory into the container. This config snippet
-  will allow us to pull container images without TLS verification in the lab environment. This is only necessary based on 
-  the use of self-signed certificates with the lack of an internal CA available.
-
 [#build]
 == Build the first bootc image
 
 As with application containers, you can build this container with standard tools:
 
+[source,bash,role="execute",subs=attributes+]
+----
+podman build --file Containerfile --tag {registry_hostname}/httpd
+----
+The arguments we pass to `podman` are:
+
   * `--file Containerfile` -> what Containerfile to use for the build
   * `--tag summit.registry/lb1506:bootc` -> the "tag" or name of the resulting container in the format
      <registry>/<repository>:<tag>
 
-[source,bash]
-----
-podman build --file Containerfile --tag summit.registry/lb1506:bootc
-----
-
-If the above command is succesful, the last two lines of the output should read like this:
+You will see `podman` process each line of the Containerfile just as it would for an application container. Once complete, the last two lines of the output should read like this:
 
 ....
-Successfully tagged summit.registry/lb1506:bootc
+Successfully tagged {registry_hostname}/httpd
 f1bea10eb37acf2e78a9b01c6242110c1901adbaf40dbce479241c6c735c58da
 ....
+
+You have now built your first complete RHEL image as a bootc image!
 
 [#distribute]
 == Distributing the bootc image
@@ -95,9 +98,9 @@ application container. The special sauce of `bootc` comes when a host is running
 
 We have a registry available within the lab environment we can push our image to:
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-podman push summit.registry/lb1506:bootc
+podman push {registry_hostname}/httpd
 ----
 
 That's all there is to designing and building a complete operating system. Start with a base, then add software and 

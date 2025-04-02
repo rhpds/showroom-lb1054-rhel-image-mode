@@ -2,19 +2,8 @@
 
 In the ever-evolving landscape of information technology (IT), containers have emerged as a fundamental component that revolutionizes software development, deployment, and management. These lightweight and portable units encapsulate applications, their dependencies, and even the underlying operating system. However, as containers have become pervasive in IT, operating system customization remains a persistent challenge, both in the context of day two configuration management and during the initial creation of operating system (OS) images.
 
-In this lab you will learn how to evolve your containers into full fledged operating systems.
+In this lab you will learn how to apply container techniques and tools to full fledged operating systems. Using standard container practices to build and distribute full OS images expands the current realm of OS design to new audiences and new tools. To accomplish this, you will learn how to create, update, and maintain an image mode for RHEL system!
 
-WARNING: This should be replaced with a description of the infrastructure and what they can expect instead of notes about the bastion
+Combined with an OS that can operate in an atomic, image based manner, updates and rollbacks become fast, safe, and carry less risk. Simple A/B deployments from centralized repositories give new ways to think about the OS across  entire infrastructure. With improvements to traceability, this will improve drift control and consistency in any target environment. 
 
-== Lab Access
-
-You can access the lab via `ssh` from a terminal on your local machine or via the web based terminal provided. You can use the slider in the middle of the screen to resize the terminal and instruction panes.
-
-[source,sh,subs=attributes+]
-----
-ssh {bastion_ssh_user_name}@{bastion_public_hostname}
-----
-
-Your password is `{bastion_ssh_password}`
-
-All steps of this lab are to be completed as the `{bastion_ssh_user_name}` user.
+Image mode for RHEL provides new ways for teams to collaborate on and make use of the standard operating environments you define for your organization. 

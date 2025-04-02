@@ -76,7 +76,7 @@ RUN systemctl enable httpd.service
 If you aren't familiar, the `ADD` directive has some extra capabilities over the `COPY` command we used for the SSL certs. Where 
 `COPY` only works on a single file, `ADD` can work on complete directories or even unpack tar files. This can 
 be very useful when dealing with standard configs, but could make the Containerfile a little opaque if 
-folks are unfamilar with the syntax.
+folks are unfamiliar with the syntax.
 
 We rebuild the image with our updates the same way we originally built it. 
 
