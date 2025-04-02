@@ -44,7 +44,7 @@ To create this basic webserver as an image mode system instead of an application
 
 [source,dockerfile,role="execute",subs=attributes+]
 ----
-FROM registry.redhat.io/rhel9/rhel-bootc:9.4
+FROM registry.redhat.io/rhel9/rhel-bootc:9.5
 
 RUN dnf install -y httpd
 RUN echo "Hello Red Hat" > /var/www/html/index.html
@@ -54,8 +54,8 @@ RUN systemctl enable httpd.service
 
 Let's talk about the effects of these changes from the application container definition:
 
-  * The `FROM` field is now pointing to the Red Hat Enterprise Linux 9.4 bootc image instead of the UBI base image.
-  This new bootc image is a complete version of RHEL 9.4, much like the KVM image available on the Customer Portal. This 
+  * The `FROM` field is now pointing to the Red Hat Enterprise Linux 9.5 bootc image instead of the UBI base image.
+  This new bootc image is a complete version of RHEL 9.5, much like the KVM image available on the Customer Portal. This 
   image includes all of the OS components to run as a host as well as the new `bootc` commands. It is built using `ostree`
   to facilitate the transactional updates that marks an image mode deployment from a package mode host.
   
@@ -76,8 +76,8 @@ podman build --file Containerfile --tag {registry_hostname}/httpd
 The arguments we pass to `podman` are:
 
   * `--file Containerfile` -> what Containerfile to use for the build
-  * `--tag summit.registry/lb1506:bootc` -> the "tag" or name of the resulting container in the format
-     <registry>/<repository>:<tag>
+  * `--tag {registry_hostname}/httpd` -> the "tag" or name of the resulting container in the format
+     <registry>/<repository>
 
 You will see `podman` process each line of the Containerfile just as it would for an application container. Once complete, the last two lines of the output should read like this:
 
