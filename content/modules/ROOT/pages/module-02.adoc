@@ -71,7 +71,7 @@ As with application containers, you can build this container with standard tools
 
 [source,bash,role="execute",subs=attributes+]
 ----
-podman build --file Containerfile --tag summit.registry/lb1506:bootc
+podman build --file Containerfile --tag {registry_hostname}/httpd
 ----
 The arguments we pass to `podman` are:
 
@@ -82,7 +82,7 @@ The arguments we pass to `podman` are:
 You will see `podman` process each line of the Containerfile just as it would for an application container. Once complete, the last two lines of the output should read like this:
 
 ....
-Successfully tagged summit.registry/lb1506:bootc
+Successfully tagged {registry_hostname}/httpd
 f1bea10eb37acf2e78a9b01c6242110c1901adbaf40dbce479241c6c735c58da
 ....
 
@@ -100,7 +100,7 @@ We have a registry available within the lab environment we can push our image to
 
 [source,bash,role="execute",subs=attributes+]
 ----
-podman push summit.registry/lb1506:bootc
+podman push {registry_hostname}/httpd
 ----
 
 That's all there is to designing and building a complete operating system. Start with a base, then add software and 
