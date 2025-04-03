@@ -1,194 +1,101 @@
-= Exploring alternate user creation methods
+= Creating an inner loop for system design
+In this exercise, you'll look at how to test without needing to deploy the image to a host.
 
-In this exercise, you'll explore other ways to create users and add credentials to image mode hosts.
+NOTE: You should on the lab host (the prompt should look like `[lab-user@hypervisor rh-summit-2024-lb1506]$``), if not log out of the VM now.
 
-[#add-creds]
-== Embedding emergency credentials into an image
-In the previous exercises, we've created users and added ssh keys at install time, either via a blueprint file 
-passed to `bootc-image-builder` or via kickstart to Anaconda. There are many ways and many reasons why handling 
-users would happen at any particular stage of the process, during deployment or after install via network authentication.
 
-In addition to adding users during the creation of a host system, via `bootc-image-builder`, `cloud-init`, or some other means, we can also create users during
-the creation of the bootc image. This can be useful in certain cases where particular emergency users are needed in environments with limited connectivity. 
-These users and credentials would be tied to the image, which means controlling how secrets are used in the build are important to understand before going 
-down this path. You will want to explore more before making this choice in your own environment.
+Being able to make changes, build, and run an application locally is part of what is called
+the 'inner loop' of application development. Containers had a big impact on making local 
+development and production run time look and feel identical, improving the inner loop for developers. 
+One advantages of image mode, the use of standard container tools brings this 'inner loop' capability 
+to the design and development of standard operating system builds. 
 
-On the host system (make sure the prompt shows `[lab-user@hypervisor rh-summit-2024-lb1506]$`), and are in the `rh-summit-2024-lb1506` directory
+While not every nuance of system behavior can be tested this way (eg SELinux polices), this still 
+can greatly reduce the amount of time usually needed to test changes to configurations, software installations, etc.
 
-[source,bash]
-----
-cd ~/rh-summit-2024-lb1506
-----
+[#test]
+== Testing a bootc image as a container
 
-[#secrets]
-== Using podman secrets at build time
-
-We will use an addtional feature of `podman` to get the credentials we want to embed passed to the image safely.
-
-You can now edit the `Containerfile` to match the following:
-
-[source,dockerfile]
-----
-FROM registry.redhat.io/rhel9/rhel-bootc:9.4
-
-COPY certs/004-summit.conf /etc/containers/registries.conf.d/004-summit.conf
-
-COPY templates/30-auth-system.conf /etc/ssh/sshd_config.d/30-auth-system.conf # <1>
-RUN mkdir -p /usr/ssh # <2>
-RUN --mount=type=secret,id=SSHPUBKEY cat /run/secrets/SSHPUBKEY > /usr/ssh/root.keys && chmod 0600 /usr/ssh/root.keys # <3>
-
-ADD etc/ /etc
-
-RUN dnf install -y httpd
-
-RUN <<EOF
-    mv /var/www /usr/share/www
-    sed -i 's-/var/www-/usr/share/www-' /etc/httpd/conf/httpd.conf
-EOF
-
-RUN echo "Hello Red Hat Summit Connect 2024!!" > /usr/share/www/html/index.html
-
-RUN systemctl enable httpd.service
-----
-<1> `COPY templates...` -> adds a drop in for sshd to look for public keys in users global `.keys` file, note this is in `/usr` and tied to the image
-<2> `RUN mkdir -p /usr/ssh` -> create the new keys directory in `/usr`
-<3> `RUN --mount=type=secret,id=SSHPUBKEY cat /run/secrets/SSHPUBKEY .. ` -> mounts the secret passed via build to a file only available at build time, then copies the contents
-
-You can now build the new container image with the following command, note the `--secret` argument. This is the connection to the `RUN` directive 
-in the Containerfile. At build time, `podman` will take the file passed and create a temporary secret which we can mount only during the build process. 
-The `id` of the secret is the filename mounted under `/run/secrets`, which we then can extract the contents for our ssh key.
-
-We're also going to use a new tag for this image, like we did in the previous `bootc switch` exercise.
+You can launch this bootc container like any other application container, `podman` will
+start `systemd` by default. Using `--detach` will help ensure that `systemd` is PID1 and 
+the bootc image will initialize as intended when running as a host.
 
 [source,bash]
 ----
-podman build --secret id=SSHPUBKEY,src=/home/lab-user/.ssh/id_rsa.pub --file Containerfile --tag summit.registry/lb1506:bootc-auth
+podman run --rm --name http-test --detach --publish 80:80 summit.registry/lb1506:bootc
 ----
 
-And make sure to push it to the registry:
+Test that it is running:
 
 [source,bash]
 ----
-podman push summit.registry/lb1506:bootc-auth
+podman ps | grep http-test
 ----
 
-[#switch-creds]
-== Changing the virtual machine image
+The output of the command above should resemble:
 
-The virtual machine you have been working with during this workshop should still be running. You can check this with
+----
+06a7bdb1950b  summit.registry/lb1506:latest    15 seconds ago  Up 16 seconds  0.0.0.0:80->80/tcp    http-test
+----
+
+We exposed a port from the container on the lab host, so we can test the web server.
 
 [source,bash]
 ----
-virsh --connect qemu:///system list
+curl http://localhost/
 ----
 
-And the output should contain a virtual machine called `qcow`.
+The result of the command above should be the latest index.html we created.
 
-Now you can ssh into the virtual machine
+----
+Hello Red Hat Summit Connect 2024!!
+----
+
+Before we attach to an interactive shell in the running container, let's get the kernel command line from the 
+lab host.
 
 [source,bash]
 ----
-ssh lab-user@qcow-vm
+cat /proc/cmdline
 ----
+....
+BOOT_IMAGE=/boot/vmlinuz root=UUID=60d0e5e3-7217-4c34-b8e0-fd3d9abf0654 ro console=tty0 console=ttyS1,115200n8 biosdevname=0 net.naming-scheme=rhel-9.3 net.ifnames=1 modprobe.blacklist=igb modprobe.blacklist=rndis_host
+....
 
-We can change to our new image with the embedded `root` credentials
+Now we can get our shell in the running container.
+[source,bash]
+----
+podman exec -it  http-test /bin/bash
+----
+....
+bash-5.1# 
+....
+
+Let's look at kernel command line as well as PID1 in the `/proc` filesystem and see what runtime info we have.
 
 [source,bash]
 ----
-sudo bootc switch summit.registry/lb1506:bootc-auth
+cat /proc/cmdline # <1>
+cat /proc/1/cgroup # <2>
+cat /proc/1/attr/current # <3>
 ----
 
-The output should look something like this:
+We can see the kernel command line is taken from the lab host since there's no running kernel in a container, systemd is running 
+as the init system from the cgroup hierarchy but a different SELinux context. Remember that systemd is run as PID1 by default 
+when a bootc image is run as a container, but since it wasn't booted as a host, none of the first boot preparation will be executed.
 
-----
-layers already present: 68; layers needed: 7 (126.7 MB)
- 452 B [████████████████████] (0s) Fetched layer sha256:2691e6642975            
-Pruned images: 0 (layers: 0, objsize: 58.9 MB)
-Queued for next boot: summit.registry/lb1506:bootc-auth
-  Version: 9.20240721.0
-  Digest: sha256:2afd495b9dd3e72aa4926deb1e738af54e0b1bb935803bc6c107bdd919347167
-----
-As usual, after the command is done you need to reboot the virtual machine
-for the changes to take effect. Before doing that, please make sure you are logged in to the
-virtual machine and not the hypervisor (the prompt should look like `[lab-user@qcow-vm ~]#`):
+<1> `BOOT_IMAGE=/boot/vmlinuz root=UUID=60d0e5e3-7217-4c34-b8e0-fd3d9abf0654 ro console=tty0 console=ttyS1,115200n8 biosdevname=0 net.naming-scheme=rhel-9.3 net.ifnames=1 modprobe.blacklist=igb modprobe.blacklist=rndis_host`
+<2> `0::/init.scope`
+<3> `system_u:system_r:container_init_t:s0:c472,c516`
+
+You can use this container to experiment with changes, understand dependecies that new software might bring, check that services can be 
+started, and more. While issues we introduced in the switch exercise may not be discovered here, there is still a lot that can be done 
+to speed creation and testing of new operating system builds.
+
+Once you're done testing, go ahead and exit the shell, and stop the running container on the host:
 
 [source,bash]
 ----
-sudo systemctl reboot
-----
-
-[#user-test]
-== Testing the changes
-
-You can now login to the virtual machine with the newly added root credentials:
-
-[source,bash]
-----
-ssh root@qcow-vm
-----
-
-And check once again the status of bootc (no need to use `sudo`, you are root):
-
-[source,bash]
-----
-bootc status
-----
-
-The output should look like this:
-
-[source,yaml]
-----
-apiVersion: org.containers.bootc/v1alpha1
-kind: BootcHost
-metadata:
-  name: host
-spec:
-  image:
-    image: summit.registry/lb1506:bootc-auth
-    transport: registry
-  bootOrder: default
-status:
-  staged: null
-  booted:
-    image:
-      image:
-        image: summit.registry/lb1506:bootc-auth
-        transport: registry
-      version: 9.20240721.0
-      timestamp: null
-      imageDigest: sha256:2afd495b9dd3e72aa4926deb1e738af54e0b1bb935803bc6c107bdd919347167
-    cachedUpdate: null
-    incompatible: false
-    pinned: false
-    ostree:
-      checksum: 6307d9fdc8be3f0c202ce49e311b1d046d6d606dea7bcff51ad5d8910f7887b3
-      deploySerial: 0
-  rollback:
-    image:
-      image:
-        image: summit.registry/lb1506:bootc-wp
-        transport: registry
-      version: 9.20240721.0
-      timestamp: null
-      imageDigest: sha256:af3c6bd4ae7beb9bb10f9846c7bc9d9ba1ede259b4b45e581ddcd97ab2df4380
-    cachedUpdate: null
-    incompatible: false
-    pinned: false
-    ostree:
-      checksum: 543f6c9a5b8e2f354db71adda5db7ca74b53bcb9fdf8c8fcd391e7c66c77062a
-      deploySerial: 0
-  rollbackQueued: false
-  type: bootcHost
-----
-
-Feel free to explore the virtual machine before moving on to the next section, remembering you are now `root`.
-
-Since we've moved away from the WordPress image back to a standard httpd service, you can look for the original 
-index file on disk or via `curl`.
-
-Before proceeding, make sure you have logged out of the virtual machine:
-
-[source,bash]
-----
-logout
+exit
+podman stop http-test
 ----
