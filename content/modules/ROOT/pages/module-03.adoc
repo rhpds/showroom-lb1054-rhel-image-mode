@@ -1,10 +1,7 @@
-= Deploy a virtual machine with bootc image
+= Deploy a virtual machine from a bootc image
 
 In this exercise, you will build a `qcow2` disk image from the bootc image and then launch
 a virtual machine from it. `qcow2` is a standard file format used by the Linux virtualization system.
-
-NOTE: This exercise includes both a make command and the commands executed by that make target. You do not need to 
-execute both.
 
 [#config]
 == Create the config for building the virtual machine image
@@ -12,8 +9,7 @@ execute both.
 To deploy our bootc image as a host, we need to get the contents of the image onto a disk. While `bootc` 
 handles those mechanics, the actual creation of a physical disk, virtual disk, or cloud image are handled 
 by other standard tools. For example, Anaconda can be used with bootc images for physical or virtual hosts 
-like you would today, but without the `%packages` block we use today. In this lab, we'll use the `bootc-image-builder` 
-tool which can create various different disk image types and call `bootc` to deploy the image contents.
+like you would today, but without the `%packages` block we use today. In this lab, we'll use the `bootc-image-builder` tool which can create various different disk image types and call `bootc` to deploy the image contents.
 
 You may have noticed the bootc image we've created does not include any login credentials. Not a 
 typical concern for an application container, but as a host we will very likely need to interact
@@ -22,79 +18,63 @@ at some point.
 Since we are defining an image to be shared by multiple hosts in multiple different environments,
 users and authentication is likely to be handled at the deployment stage, not the build stage.
 
-NOTE: There are cases where it may be useful for a user and credentials to be added to an image, 
+TIP: There are cases where it may be useful for a user and credentials to be added to an image, 
 as a 'break glass' emergency login for example.
 
 To add a user during the conversion to a disk image, you need add the credentials to the config file used by `bootc-image-builder` to create the final disk image.
 
-A ssh key has been generated in the Setup section of this lab. You can view the public part like this:
+We'll generate a new ssh key for use during the lab
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
+----
+ssh-keygen -f ~/.ssh/id_rsa -N ""
+----
+
+You can view the public part like this:
+
+[source,bash,role="execute",subs=attributes+]
 ----
 cat ~/.ssh/id_rsa.pub
 ----
-
-The output should look something like this (Example):
-
 ....
 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAuXnpoluye+KM+9tvIAdHf+F0IHh+K73tlcjEG8LJRB lab-user@hypervisor
 ....
+NOTE: This is only a sample and this public key will not work in your environment
 
-You can now create a file called `config-qcow2.json` with the following contents, replacing "SSHKEY" 
+You can now create a file called `config-qcow2.toml` with the following contents, replacing "SSHKEY" 
 in the `key` field with the contents of `~/.ssh/id_rsa.pub` from your system:
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-nano config-qcow2.json
-----
-
-[source,json]
-----
-{
-  "blueprint": {
-    "customizations": {
-      "user": [
-        {
-          "name": "lab-user",
-          "password": "lb1506",
-          "key": "SSHKEY",
-          "groups": [
-            "wheel"
-          ]
-        }
-      ]
-    }
-  }
-}
+nano config-qcow2.toml
 ----
 
-This configuration blueprint creates a user in the resulting virtual machine with the login `lab-user`, the password `lb1506` and the 
-ssh key of the user on the lab host.
+[source,yaml,role="execute",subs=attributes+]
+----
+[[customizations.user]]
+name = "{vm_user}"
+password = "{vm_user_pass}"
+groups = ["wheel"]
+key = "SSHKEY"
+----
 
-NOTE: For your convenience, a config file has already been generated with the ssh key for your lab host in `config/config-qcow2.json` so
-you can just use that with `cp config/config-qcow2.json config-qcow2.json`.
+This configuration blueprint creates a user in the resulting virtual machine with the login `{vm_user}`, the password `{vm_user_pass}` and the ssh key of the user on the lab host.
 
 [#create]
 == Create the disk image
 
-First, you want to make sure the bootc image is available to the local registry:
+To convert from an OCI image to a disk image, we have a special version of image builder that has support for `bootc`. This `bootc-image-builder` itself runs as a container, and as a result needs additional capabilities and to be run as `root`. As `bootc-image-builder` accesses local storage to find the source image, we will need to copy our image from user storage to system storage. The `podman image scp` command can do this for us, as well as copying to various different targets. When executed with a source but without a destination as below, the default is local system storage.
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-skopeo inspect docker://summit.registry/lb1506:bootc | jq '.Digest'
+podman image scp lab-user@localhost::{registry_hostname}/httpd
 ----
-....
-"sha256:655721ff613ee766a4126cb5e0d5ae81598e1b0c3bcf7017c36c4d72cb092fe9"
-....
-
-To convert from an OCI image to a disk image, we have a special version of image builder that has support for `bootc`. This 
-`bootc-image-builder` itself runs as a container, and as a result needs additional capabilities and to be run as `root`.
 
 Try to generate the image now:
 
 NOTE: This could take 2+ minutes to complete.
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
 sudo podman run --rm --privileged \
   --security-opt label=type:unconfined_t \
@@ -103,7 +83,7 @@ sudo podman run --rm --privileged \
   --volume /var/lib/containers/storage:/var/lib/containers/storage \
   registry.redhat.io/rhel9/bootc-image-builder:latest \
   --type qcow2 \
-  summit.registry/lb1506:bootc
+  {registry_hostname}/httpd
 ----
 
 A brief explanation of the arguments used for `podman` and `bootc-image-builder`:
@@ -116,21 +96,14 @@ A brief explanation of the arguments used for `podman` and `bootc-image-builder`
 After the image builder version, these arguments passed to `bootc-image-builder`:
 
   * `--type qcow2` -> the type of image to build
-  * `--config /config.json` -> the json configuration file used; please note this is relative to the container volume we added
-  * `--tls-verify=false` -> the registry we are running is local and it has self signed certificates; this flag would not be needed with `quay.io` for example
-  * `summit.registry/lb1506:bootc` -> the bootc image we are unpacking into the qcow2 disk
+  * `{registry_hostname}/httpd` -> the bootc image we are unpacking into the qcow2 disk
 
 Once this completes, you will find the image is the `qcow2/` directory:
 
-NOTE: For your convenience, this part of the exercise is automated by using the `make qcow CONTAINER=summit.registry/lb1506:bootc` command.
-
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
 ls -lah qcow2/disk.qcow2
 ----
-
-The output should be similar to:
-
 ....
 -rw-r--r--. 1 root root 945M May  2 06:10 qcow2/disk.qcow2
 ....
@@ -138,50 +111,45 @@ The output should be similar to:
 [#create-vm]
 == Create the virtual machine
 
-The creation of virtual machines is out of scope for this lab, so we have provided a convenience command in the Makefile.
-We've detailed the commands being run so you can follow along with what is happening. If you like, feel free to run the 
-commands on your own instead of using the `make` target. The core of the `virt-install` command used is `--import` which 
-skips the install process and creates the VM based on the provided disk image.
+Since we provided the QCOW2 type to `bootc-image-builder`, the resulting disk image is complete and ready to run without additional installation or other steps. We can copy the image to the standard storage pool location for KVM.
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-make vm-qcow
+sudo cp qcow2/disk.qcow2 /var/lib/libvirt/images/qcow-vm.qcow2
 ----
 
-*For reference*, commands executed in the Makefile and displayed in the terminal are:
+The creation of KVM virtual machines is out of scope for this lab, but the core of the `virt-install` command used is `--import` which skips the install process and creates the VM based on the provided disk image. 
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-sudo cp qcow2/disk.qcow2 /var/lib/libvirt/images/summit/qcow-vm.qcow2
 virt-install --connect qemu:///system \
-                --name qcow \
-                --disk /var/lib/libvirt/images/summit/qcow-vm.qcow2 \
-                --import \
-                --network "network=summit-network,mac=de:ad:be:ef:01:03" \
-                --memory 4096 \
-                --graphics none \
-                --osinfo rhel9-unknown \
-                --noautoconsole \
-                --noreboot
-virsh --connect qemu:///system start qcow
+  --name qcow-vm \
+  --disk /var/lib/libvirt/images/qcow-vm.qcow2 \
+  --import \
+  --memory 4096 \
+  --graphics none \
+  --osinfo rhel9-unknown \
+  --noautoconsole \
+  --noreboot
 ----
 
-If `make vm-qcow` was successful, you should see the final line of output like this:
+We can now start our new bootc virtual machine.
 
-....
-Domain 'qcow' started
-....
+[source,bash,role="execute",subs=attributes+]
+----
+virsh --connect qemu:///system start qcow-vm
+----
 
 Check to make sure the virtual machine running:
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
 virsh --connect qemu:///system list
 ----
 ....
  Id   Name                State
 ------------------------------------
- 1    qcow                running
+ 1    qcow-vm                running
 ....
 
 [#test]
@@ -190,100 +158,103 @@ virsh --connect qemu:///system list
 Congratulations, you are running a bootc virtual machine!  Now that the virtual machine is up 
 and running, you can see if the webserver behaves as expected.
 
-[source,bash]
+NOTE: Until the VM finishes booting, you will get name resolution errors from `curl`. You can either wait and retry or monitor the progress of the boot by connecting to the serial console via `virsh``.
+
+[source,bash,role="execute",subs=attributes+]
 ----
 curl http://qcow-vm
 ----
 
 And the results should be the "Hello Red Hat" string defined in the index.html.
 
+Before we log into our VM, let's check the SHA256 digest of the image in the local registry:
+
+[source,bash,role="execute",subs=attributes+]
+----
+skopeo inspect docker://{registry_hostname}/httpd | jq '.Digest'
+----
+....
+"sha256:99694ce76cedd1fa58250c4e5ee6deeb4d91993b89054793394cda31b1d046ab"
+....
+
+This is a way to ensure the image on the system is the same as the image in the registry.
+
 You can now login to the virtual machine.
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-ssh lab-user@qcow-vm
+ssh {vm_user}@qcow-vm
 ----
 
-NOTE: If the ssh key is not automatically picked up, use the password defined in the JSON file at the beginning of this lab (by default `lb1506`). 
+NOTE: If the ssh key is not automatically picked up, use the password defined in the config file at the beginning of this lab (by default `{vm_user_pass}`). 
 This is also the password to use when prompted by `sudo`.
 
 Once you have logged in, you can inspect the bootc status.
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
 sudo bootc status
 ----
+....
+No staged image present
+Current booted image: node.g94th.g94th.gcp.redhatworkshops.io/httpd:latest <1>
+    Image version: 9.20250326.0 (2025-04-03 14:36:38.438935004 UTC)
+    Image digest: sha256:99694ce76cedd1fa58250c4e5ee6deeb4d91993b89054793394cda31b1d046ab
+No rollback image present
+....
 
-The output should look similar to this:
+This status provides information about the images on the host. There are 3 different images that may be available on a bootc host: the booted image, the staged image, and the rollback image. We'll discuss the latter two images later in the lab, but look at the booted image info:
 
-[source,yaml]
-----
-apiVersion: org.containers.bootc/v1alpha1
-kind: BootcHost
-metadata:
-  name: host
-spec:
-  image:
-    image: summit.registry/lb1506:bootc
-    transport: registry
-  bootOrder: default
-status:
-  staged: null
-  booted: <1>
-    image:
-      image:
-        image: summit.registry/lb1506:bootc
-        transport: registry
-      version: 9.20240501.0
-      timestamp: null
-      imageDigest: sha256:0a3daed6e31c2f2917e17ea994059e1aaee0481fe16836c118c5e1d10a87365c
-    cachedUpdate: null
-    incompatible: false
-    pinned: false
-    ostree:
-      checksum: 008e3bef805f25224f591240627bea2a06ce12b25494836c2dab7d1b0a1691a8
-      deploySerial: 0
-  rollback: null
-  rollbackQueued: false
-  type: bootcHost
-----
-
-From the output of `bootc status`, find the block that starts with `booted`. 
-
-<1> This block provides information about the image in use. You can see that image is listed as `summit.registry/lb1506:bootc`.
+<1> This section details the name of the image currently running, the version with creation timestamp, and the SHA256 digest from the registry. This digest should match the previous output from `skopeo`. This status provides several ways to identify and validate the image in use.
 
 You can explore the virtual machine before moving on to the next section:
 
-  * `systemctl status httpd` -> see the `httpd` service we have enabled in the Containerfile
-  * `cat /var/www/html/index.html` -> see the index.html file we have created in the Containerfile
+  * `systemctl status httpd` -> check on the `httpd` service we have enabled in the Containerfile
+  * `cat /var/www/html/index.html` -> see the index.html file we tested via `curl`
 
-Our services are running, but how can we tell that we are on system and not running a container? First, `bootc` can tell you directly if it's being run 
-on an image mode host or not in the `bootc status` output. It will be all `null` values if run on a non-bootc enabled host. 
+Our services are running, but how can we tell that we are on system and not running a container? 
 
-For other ways, we can look at how the system was started and some of the characteristics that will change, like SELinux context.
+First, `bootc` can tell you directly if it's being run on an image mode host or not. If `bootc` were to be installed and run on a non-bootc host, `bootc status` will show all `null` values if run on a non-bootc enabled host. 
 
-Let's look at kernel command line as well as PID1 in the `/proc` filesystem and see what runtime info we have.
+For other ways, we can look at how the system was started, let's look at kernel command line.
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
- cat /proc/cmdline # <1> 
- cat /proc/1/cgroup # <2> 
- cat /proc/1/attr/current # <3>
+ cat /proc/cmdline
 ----
+....
+BOOT_IMAGE=(hd0,gpt3)/boot/ostree/default-6fe9dddacaf5c3232ba2332010aa7442e0a6d0e3f455b7572b047cc2284c3f2f/vmlinuz-5.14.0-427.26.1.el9_4.x86_64 root=UUID=5425bac2-bfc2-457d-93f8-ae7d3bf14d6d rw boot=UUID=9b9c7b0a-61c6-4a66-ade5-8c6690f1efa7 rw console=tty0 console=ttyS0 ostree=/ostree/boot.1/default/6fe9dddacaf5c3232ba2332010aa7442e0a6d0e3f455b7572b047cc2284c3f2f/0
+....
 
-We can see in the kernel command line some clear ties to an `ostree` partition, and our PID1 details shows systemd running with init scope from 
-the cgroup hierarchy and SELinux context. We'll look at the container output in a later exercise, but the SELinux context would differ.
+We can see in the kernel command line some clear ties to an `ostree` partition, which is how images are stored and managed on a bootc host. We'll talk more about that later.
 
-<1> `BOOT_IMAGE=(hd0,gpt3)/boot/ostree/default-6fe9dddacaf5c3232ba2332010aa7442e0a6d0e3f455b7572b047cc2284c3f2f/vmlinuz-5.14.0-427.26.1.el9_4.x86_64 root=UUID=5425bac2-bfc2-457d-93f8-ae7d3bf14d6d rw boot=UUID=9b9c7b0a-61c6-4a66-ade5-8c6690f1efa7 rw console=tty0 console=ttyS0 ostree=/ostree/boot.1/default/6fe9dddacaf5c3232ba2332010aa7442e0a6d0e3f455b7572b047cc2284c3f2f/0`
-<2> `0::/init.scope`
-<3> `system_u:system_r:init_t:s0`
 
+One other obvious difference for bootc hosts is the layout of the filesystem. 
+
+[source,bash,role="execute",subs=attributes+]
+----
+ df -Th
+----
+....
+Filesystem     Type      Size  Used Avail Use% Mounted on
+devtmpfs       devtmpfs  4.0M     0  4.0M   0% /dev
+tmpfs          tmpfs     2.0G     0  2.0G   0% /dev/shm
+tmpfs          tmpfs     783M  592K  783M   1% /run
+/dev/vda4      xfs       8.5G  1.9G  6.7G  22% /sysroot
+composefs      overlay   6.3M  6.3M     0 100% /
+tmpfs          tmpfs     2.0G     0  2.0G   0% /tmp
+/dev/vda3      xfs       960M  145M  816M  16% /boot
+/dev/vda2      vfat      501M  7.1M  494M   2% /boot/efi
+tmpfs          tmpfs     392M     0  392M   0% /run/user/1000
+....
+
+Rather than the usual layout, you'll notice that our root filesystem is an overlay and `/sysroot` looks like where most of the storage is used. You can also check the output of `ls -l /` and notice that there are a lot of symlinks where you might expect directories or filesystems.  This is a key difference that is tied to how updates, rollbacks, and software management works on image mode hosts.  We'll explore this in a later exercise.
 
 Before proceeding, make sure you have logged out of the virtual machine:
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
 logout
 ----
 
-The prompt should read `[lab-user@hypervisor rh-summit-2024-lb1506]$` before continuing.
+The prompt should look like `[lab-user@multi-cloud-base-infra-g94th-vm ~]$` before continuing.
