@@ -15,29 +15,30 @@ files we need inside it. This allows us to add all the configs at once with a si
 a single layer of the image.
 
 NOTE: This is a local directory, relative to the location of the Containerfile, not the system `/etc/`.
-These files are also provided in the `examples/update` directory. 
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
 mkdir -p etc/sudoers.d
 ----
 
 Since the motd file lives in the top level of `/etc`, that one command creates all the paths 
 we need for this exercise. RHEL supports drop-in directories for several services and applications, including 
-`sudo` privileges. Drop-in support lets us add a file to a `<servicename>.d` directory rather than editing 
-the main configuration file. You might already be familiar with drop-in config files from working with Apache and 
-it's `/etc/httpd/conf.d/` directory.
+`sudo` privileges. 
+
+Drop-in support lets us add a file to a `<servicename>.d` directory rather than editing 
+the main configuration file. You might already be familiar with drop-in config files from working with Apache and it's `/etc/httpd/conf.d/` directory. Using drop-in files lets us affect the configuration of a system, without needing to edit a file in place, or carry a full configuration file in the image.
 
 
 Let's address the sudoers password first, by allowing users in the wheel group to not need to enter their password.
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
 nano etc/sudoers.d/wheel
 ----
 
 Add the following and save the file
 
+[source,bash,role="execute",subs=attributes+]
 ----
 # Enable passwordless sudo for the wheel group
 %wheel        ALL=(ALL)       NOPASSWD: ALL
@@ -45,158 +46,114 @@ Add the following and save the file
 
 And let's provide a message of the day!
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
 nano etc/motd
 ----
 
 Add the following and save the file
 
+[source,bash,role="execute",subs=attributes+]
 ----
 Welcome to the image mode lifestyle!
 ----
 
 Now that we have our new configs, we can add them to the Containerfile and rebuild the image.
 
-[source,dockerfile]
+[source,dockerfile,role="execute",subs=attributes+]
 ----
-FROM registry.redhat.io/rhel9/rhel-bootc:9.4
-
-COPY certs/004-summit.conf /etc/containers/registries.conf.d/004-summit.conf
+FROM registry.redhat.io/rhel9/rhel-bootc:9.5
 
 ADD etc/ /etc # <1>
 
 RUN dnf install -y httpd
-RUN echo "Hello Red Hat Summit Connect 2024!!" > /var/www/html/index.html
+RUN echo "Hello Red Hat Summit 2025!!" > /var/www/html/index.html
 
 RUN systemctl enable httpd.service
 ----
-<1> Adding the files we just created
+<1> Copies the local `etc/` contents we just created into `/etc` in the image
 
-If you aren't familiar, the `ADD` directive has some extra capabilities over the `COPY` command we used for the SSL certs. Where 
-`COPY` only works on a single file, `ADD` can work on complete directories or even unpack tar files. This can 
-be very useful when dealing with standard configs, but could make the Containerfile a little opaque if 
-folks are unfamiliar with the syntax.
+If you aren't familiar, the `ADD` directive has some extra capabilities over the `COPY` command. Where `COPY` only works on a single file, `ADD` can work on complete directories or even unpack tar files. This can be very useful when dealing with multiple files and directories that all start from the same place, but could make the Containerfile a little opaque if folks are unfamiliar with the syntax and the results.
 
 We rebuild the image with our updates the same way we originally built it. 
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-podman build --file Containerfile --tag summit.registry/lb1506:bootc
+podman build --file Containerfile --tag {registry_hostname}/httpd
 ----
 
 And make sure to push it to the registry:
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-podman push summit.registry/lb1506:bootc
+podman push {registry_hostname}/httpd
 ----
+
+We now have replaced the original image in the registry we used to create the virtual machine with a new image. This is the standard workflow for making changes to an image mode host. All of our updates, additions, or changes are done via the build systems we use, and are then published to be used by the hosts. We'll talk more about updates and how to differentiate them in a later exercise.
 
 [#update-vm]
 == Updating the virtual machine
 
-The last virtual machine you have created during this workshop should still be running. You can check this with
+The virtual machine you have created in the previous exercise should still be running. You can check this with:
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
 virsh --connect qemu:///system list
 ----
 
-And the output should the virtual machine called `qcow` as `running`.
+And the output should list the virtual machine called `qcow-vm` as `running`.
 
 Now you can ssh into the virtual machine:
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-ssh lab-user@qcow-vm
+ssh {vm_user}@qcow-vm
 ----
 
-The `bootc update` command will download and prepare a detected update for use at the next boot. This means updates are offline, and 
-can be applied at any time. Changes will only take effect when the system reboots. (Reminder, the password for `sudo` is `lb1506`):
+The `bootc update` command will download and prepare a detected update for use at the next boot. This means updates are offline, and can be applied at any time. Changes will only take effect when the system reboots. 
 
-[source,bash]
+(Reminder, the password for `sudo` is `{vm_user_pass}`)
+[source,bash,role="execute",subs=attributes+]
 ----
 sudo bootc update
 ----
 
-The output should look something like this:
+Notice that `bootc update` provides information about the layers that have been modified and a progress indicator. The update mechanism also uses container tools to pull the image from the registry to the host for preparation. This means we only pull down the layers that were changed, not the full image if not needed. Later versions of `bootc` will expand this idea of delta updated to further reduce the time and bandwidth used for updates.
 
+The final output should look something like this:
 ....
-Loading usr/lib/ostree/prepare-root.conf
-Queued for next boot: summit.registry/lb1506:bootc-auth
-  Version: 9.20240501.0
-  Digest: sha256:c5a5bc63cc5d081c528c82a177d0c5eac996a16fa3a651f93d07825302ff5336
-Total new layers: 73    Size: 947.9 MB
-Removed layers:   6     Size: 2.3 kB
-Added layers:     6     Size: 2.2 kB
+layers already present: 67; layers needed: 4 (185.1 MB)
+Fetched layers: 176.49 MiB in 28 seconds (6.26 MiB/s)                                   
+  Deploying: done (5 seconds)                                                           
+Queued for next boot: node.cxdrb.cxdrb.gcp.redhatworkshops.io/httpd
+  Version: 9.20250326.0
+  Digest: sha256:737be173b45120c062473e9a88d020bc33c32a9069d4c257b74e4f5ab7241e41
+Total new layers: 71    Size: 1.2 GB
+Removed layers:   3     Size: 185.1 MB
+Added layers:     4     Size: 185.1 MB
 ....
 
-Notice that `bootc update` provides information about the layers that have been modified. 
-
-[source,bash]
+Let's check the current status of the host.
+[source,bash,role="execute",subs=attributes+]
 ----
 sudo bootc status
 ----
+....
+Current staged image: node.cxdrb.cxdrb.gcp.redhatworkshops.io/httpd <1>
+    Image version: 9.20250326.0 (2025-04-04 14:28:06.536999208 UTC)
+    Image digest: sha256:737be173b45120c062473e9a88d020bc33c32a9069d4c257b74e4f5ab7241e41
+Current booted image: node.cxdrb.cxdrb.gcp.redhatworkshops.io/httpd
+    Image version: 9.20250326.0 (2025-04-04 14:11:45.808515934 UTC)
+    Image digest: sha256:1e69b8a519eccf248e235960dd5eef3c5c546226c0000c655126e00e11438519
+No rollback image present
+....
+<1> The SHA in the `staged` block should match the Digest from the output of `bootc update`. You will also see the timestamp of the change. Since the base image is the same, no change shows up in the version output.
 
-The output should look like:
+Updates to bootc hosts are offline in nature, meaning the new image has been readied for deployment, but no other changes have been made to the running system. 
 
-[source,yaml]
-----
-apiVersion: org.containers.bootc/v1alpha1
-kind: BootcHost
-metadata:
-  name: host
-spec:
-  image:
-    image: summit.registry/lb1506:bootc
-    transport: registry
-  bootOrder: default
-status:
-  staged: <1>
-    image:
-      image:
-        image: summit.registry/lb1506:bootc
-        transport: registry
-      version: 9.20240501.0
-      timestamp: null
-      imageDigest: sha256:c5a5bc63cc5d081c528c82a177d0c5eac996a16fa3a651f93d07825302ff5336
-    cachedUpdate: null
-    incompatible: false
-    pinned: false
-    ostree:
-      checksum: 20cbee67379b96ad9eb273c0f7a7cd3673644e2d8af13f8b7437afd12dc95070
-      deploySerial: 0
-  booted:
-    image:
-      image:
-        image: summit.registry/lb1506:bootc
-        transport: registry
-      version: 9.20240501.0
-      timestamp: null
-      imageDigest: sha256:b57df8b24f7ddaf39ade0efe02d203e4fcd63deca2a9fd47f4af5c2cc3fcd017
-    cachedUpdate:
-      image:
-        image: summit.registry/lb1506:bootc
-        transport: registry
-      version: 9.20240501.0
-      timestamp: null
-      imageDigest: sha256:c5a5bc63cc5d081c528c82a177d0c5eac996a16fa3a651f93d07825302ff5336
-    incompatible: false
-    pinned: false
-    ostree:
-      checksum: 22b18bfa0e94fbe390379cb4bae150ebad85c8844e7b721179d26c1df636ce8e
-      deploySerial: 0
-  rollback: null
-  rollbackQueued: false
-  type: bootcHost
-----
-<1> You can see the staged changes in addition to current running state of the host in `bootc status`. The SHA in the `staged` block 
-should match the Digest from the output of `bootc update`. 
+The last step for the change to take is to reboot the virtual machine. Before doing so, please make sure you are logged in to the virtual machine and not the hypervisor, the prompt should look like `[{vm_user}@localhost ~]$`.
 
-The last step for the change to take is to reboot the virtual machine. Before doing so, please make sure you are logged in to the
-virtual machine and not the hypervisor (the prompt should look like `[lab-user@qcow-vm ~]$`):
-
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
 sudo systemctl reboot
 ----
@@ -206,19 +163,19 @@ sudo systemctl reboot
 
 After a short wait, log back into the system and and you should see the message of the day after logging in successfully.
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-ssh lab-user@qcow-vm
+ssh {vm_user}@qcow-vm
 ----
 
 We can check on our sudoers policy change as well. You shouldn't be prompted for you password:
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
 sudo cat /etc/motd
 ----
 
 What about the change to the index page?
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
 curl http://localhost
 sudo cat /var/www/html/index.html
@@ -231,5 +188,5 @@ Hello Red Hat
 The new text doesn't appear, and it's also not in the file on disk. This is *expected* based on 
 how `bootc` handles directories and image contents during changes.
 
-Stay logged into the VM to explore this in the next module.
+Stay logged into the VM to explore how `bootc` manages file updates in the next module.
 
