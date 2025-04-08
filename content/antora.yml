@@ -17,5 +17,9 @@ asciidoc:
     vm_user: core
     vm_user_pass: LB1054!
     page-links:
+    - url: https://red.ht/imagemode
+      text: Learn more about image mode
+    - url: https://labs.redhat.com
+      text: Hands-on labs for RHEL
     - url: https://redhat.com
       text: Red Hat
