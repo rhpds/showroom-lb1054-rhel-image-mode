@@ -6,35 +6,76 @@ Red Hat publishes updated base images to the Container Catalog regularly, to und
 
 * Insert a screenshot of the dropdown in the catalog
 
-== Anatomy of a container repository
+[#naming]
+== What's in a name?
 
-Remember the naming convention for images is <registry>/<repository>/<name>:<tag>, so for the bootc images we have been using the registry is `registry.redhat.io` and the repository is `rhel9`. The table below describes the tags associated with the `rhel-bootc` image.
+Let's do a quick refresher on what makes up the 'name' of a container image. The official convention for images is <host>/<namespace>/<repository>:<tag>.
+[cols="~,~"]
+|===
+|host
+|domain name of the registry in use, can include a port number if needed (eg `localhost:5000`)
+
+|namespace
+|(optional) usually the username or organization name within the registry, can represent other things depending on the registry service. _Not to be confused with Linux namespaces within the kernel._ (eg `quay.io/prometheus`)
+
+|repository
+|what most folks think of as the 'name' of an image, but technically a space for a collection of images, typically related. these days, this collection is typically just iterations of a single image over time, not totally different but related images (eg `rhel-bootc`) 
+
+|tag
+|(optional) identifier for a specific image in the repository, used to convey some information about the contents of the image, has a default of `latest` (eg `rhel-bootc:9.5`)
+
+|digest
+|not part of the naming, but how images and tags in registries are actually tracked via SHA256, can be used to pull specific images directly (eg `rhel-bootc@sha256:ee593d553dcda33f424bc0d262fef35b207e0a7df1dce3a0e25584b139c4a4ef`)
+|===
+
+So far, we have be using `registry.redhat.io/rhel9/rhel-bootc:9.5` in the FROM line of the Containerfile, so let's break that down according to our table:
+
+[cols="~,~"]
+|===
+|host
+|registry.redhat.io
+
+|namespace
+|rhel9
+
+|repository
+|rhel-bootc
+
+|tag
+|9.5
+|===
+
+The earlier RHEL 9.4 images are also in the same `rhel-bootc` repository of the `rhel9` namespace. This lets us keep the base images organized in a few different ways by using tags.
+
+The table below describes the tags associated with the `rhel-bootc` repository.
 [cols="~,~"]
 |===
 |latest
-|the most recent build of a major release
+|the most recent minor release build *within a major* release
 
 |9.5
-|the most recent build of a minor release
+|the most recent build of a *particular minor* release
 
 |9.5-1742979700
-|a timestamped build of a minor release
+|a *timestamped build* of a minor release
 |===
 
-So far, we have be using `registry.redhat.io/rhel9/rhel-bootc:9.5` in the FROM line of the Containerfile, meaning we are using the most recent build of the 9.5 minor release of the `rhel-bootc` image. 
-
-At the time of writing that is also what `latest` would point to. Both of these also point to `9.5-1742979700`, as seen in the screenshot above.
-
-Those timestamps are in UNIX epoch time so the `date` command can show us when a build was made.
-
+[TIP]
+====
+Those timestamps are in UNIX epoch time, so the `date` command can show us when a build was made.
 ....
 date -d@1742979700
 Wed Mar 26 05:01:40 AM EDT 2025
 ....
-This also means that should a new build be published to the catalog, that new base image could be used depending on the state of the container image storage cache on the build host.
+====
 
-== Updating the base image using timestamps
-Let's build a new image using an older code that still checks out to start.
+At the time of writing, `latest` would point to `9.5`, the most current minor release of RHEL 9. Both of these also point to `9.5-1742979700`, as seen in the screenshot above. This also means that should a new timestamped build be published to the catalog, the `9.5` tag would automatically update to that next new build. 
+
+If that new build were a new minor release (eg 9.6), the `latest` tag would point to that minor. Knowing what tags point to what images, and therefor what software is available in your base image is important. 
+
+[#tag-build]
+== Using specific versions of base images
+Let's build a new image using an older tag that still checks out to get an idea of how this works and how you can use it to control updates.
 
 [source,dockerfile,role="execute",subs=attributes+]
 ----
@@ -45,26 +86,59 @@ RUN echo "Hello Red Hat" > /var/www/html/index.html
 
 RUN systemctl enable httpd.service
 ----
-
-Since we're using a tag that doesn't change in the registry, we know that we will always use the same base image no matter the state of the build host.
-
-[source,bash,role="execute",subs=attributes+]
-----
-podman build --file Containerfile --tag {registry_hostname}/httpd
-----
-
+[NOTE]
+====
+Since we're using a tag that doesn't change in the registry, we know that we will always use the same base image no matter the state of the build host. If we had fewer tags or ones that moved more frequently, this is where we could use the SHA256 digest instead of a tag to be specific about image use.
+====
 
 [source,bash,role="execute",subs=attributes+]
 ----
-podman push {registry_hostname}/httpd
+podman build --file Containerfile --tag {registry_hostname}/base-check
 ----
+You should notice that this build starts by pulling the base image, since it's different than what we have been using.  Since this is just an older version, you will still see shared layers being skipped.
 
-bootc switch on target VM
+[#test]
+== Locally testing builds
+In our normal workflow, we'd push this image to the registry and then update a bootc host to see any changes. Since these are, after all, container images, we can inspect them locally. Being able to run certain kinds of tests using a container engine without needing to fully boot an image can be a useful tool, especially when iterating on a build.
 
-check some version of known RPm update
+Let's check the version of the kernel that was shipped in this older base image by running a shell in a temporary container.
 
-build with newer timestamp
+[source,bash,role="execute",subs=attributes+]
+----
+podman run --rm -i {registry_hostname}/base-check rpm -qa httpd kernel*
+----
+The arguments we pass to `podman run` are:
 
+  * `--rm` -> remove the container immediately on exit
+  * `-i` -> pipe stdin into the container
+  * `{registry_hostname}/base-check` -> the image we just built to launch the container
+  * `rpm -qa httpd kernel*` -> the command to read from stdin and run inside the temporary container
+....
+kernel-modules-core-5.14.0-503.23.2.el9_5.x86_64
+kernel-core-5.14.0-503.23.2.el9_5.x86_64
+kernel-modules-5.14.0-503.23.2.el9_5.x86_64
+kernel-5.14.0-503.23.2.el9_5.x86_64
+httpd-2.4.62-1.el9_5.2.x86_64
+....
+
+You may be tempted to check the kernel version with something like `uname -r`, let's see what happens
+[source,bash,role="execute",subs=attributes+]
+----
+podman run --rm -i {registry_hostname}/base-check uname -r
+----
+....
+5.14.0-503.31.1.el9_5.x86_64
+....
+
+Since this is a container, and not a VM, we will see the host's system kernel version not the one from the RPM list.
+
+This sort of local testing is often called the 'inner loop' in software development, something not previously available to the design and development of standard operating system builds. For some testing, you need to launch a container fully to get `systemd` started instead of running it interactively, like checking on the httpd service.
+
+While not every nuance of system behavior can be tested in a container (eg SELinux polices), this still can greatly reduce the amount of time usually needed to test changes Local VMs, like used in this lab, can be a very good way to create a full local testing environment for new bootc images. 
+
+[#tag-update]
+== Updating the base image using tags
+To update the base image, we only need to change the tag to the latest timestamp variant (as of the writing of this exercise) and build the image:
 [source,dockerfile,role="execute",subs=attributes+]
 ----
 FROM registry.redhat.io/rhel9/rhel-bootc:9.5-1742979700
@@ -75,17 +149,31 @@ RUN echo "Hello Red Hat" > /var/www/html/index.html
 RUN systemctl enable httpd.service
 ----
 
-Since we're using a tag that doesn't change in the registry, we know that we will always use the same base image no matter the state of the build host.
-
 [source,bash,role="execute",subs=attributes+]
 ----
-podman build --file Containerfile --tag {registry_hostname}/httpd
+podman build --file Containerfile --tag {registry_hostname}/base-check
 ----
- Note we're using the same naming and tag for the image with our application in it. We want the host to see this as an update, not as a new image to switch into.
+You should notice that this build skips *all* of the layers when pulling the base image. While it's a different tag, it's the same image as the one we've used throughout the exercises. Multiple tags can refer to a single image, allow you to convey meaningful information about an image. 
 
+You should also notice that we completely rebuilt the image, since the change in the container definition was at the very first instruction. This means the whole cache is skipped, unlike the previous builds in this lab.
+
+Now let's check the package versions in this base image using the same commands as before, but with our new image.
 [source,bash,role="execute",subs=attributes+]
 ----
-podman push {registry_hostname}/httpd
+podman run --rm -i {registry_hostname}/base-check rpm -qa httpd kernel*
 ----
+....
+kernel-modules-core-5.14.0-503.33.1.el9_5.x86_64
+kernel-core-5.14.0-503.33.1.el9_5.x86_64
+kernel-modules-5.14.0-503.33.1.el9_5.x86_64
+kernel-5.14.0-503.33.1.el9_5.x86_64
+httpd-2.4.62-1.el9_5.2.x86_64
+....
 
-Making use of the tags in the catalog provides you with more options to control and trace your images. And to do the same with the packages you install, you can use something like Satellite to control the visibility of new packages at build time.
+There's a newer kernel provided by the updated base image, but the version of httpd installed is the same. We're using repositories directly from the Red Hat services, any packages we add during the container build will be whatever is most recently published. You can also update to a newer minor version by simply changing the tag to match.
+
+// ANCHOR NEW BRANCH HERE
+
+Making use of the tags in the catalog provides you with more options to control and trace your base images. To do the same with the packages you install on top of the base, you can use something like Satellite to control the visibility of new packages at build time. This combination can eliminate any drift between base images and installed packages from repositories.
+
+You could routinely check the catalog for updates on some set schedule that works for your operational needs. This could be tedious across a large number of standard builds and could be automated. You could also take advantage of a new set of tools, not usually available for standard operating environment build and design. As image mode uses standard container methods, you can use other standard container tools like those that drive current gitops pipelines. This opens the door to entirely different ways of automating the building, deploying, and maintaining of your standard operating environments and the application images that use them. If you'd like to read more about a gitops flow, we have a blog that https://www.redhat.com/en/blog/jumpstart-gitops-image-mode[walks through a simple set up on GitHub] with an accompanying template.

@@ -26,14 +26,17 @@
 ** xref:module-05.adoc#update2-vm[Updating the virtual machine]
 ** xref:module-05.adoc#testing[Testing the changes]
 
-* xref:module-06.adoc[6. Repurposing a bootc host]
-** xref:module-06.adoc#write-containerfiles[Write containerfile]
-** xref:module-06.adoc#build[Build and push new image]
-** xref:module-06.adoc#switch-run[Switch the image and run]
-** xref:module-06.adoc##layers[Troubleshooting updates]
+* xref:module-06.adoc[6. Applying RHEL updates to the bootc base images]
+** xref:module-06.adoc#naming[Image naming]
+** xref:module-06.adoc#tag-build[Build with specific image]
+** xref:module-06.adoc#test[Testing locally]
+** xref:module-06.adoc#tag-update[Updates using tags]
 
-* xref:module-07.adoc[7. Local image mode testing]
-** xref:module-07.adoc#test[Testing as a container]
+* xref:module-07.adoc[7. Repurposing a bootc host]
+** xref:module-07.adoc#write-containerfiles[Write containerfile]
+** xref:module-07.adoc#build[Build and push new image]
+** xref:module-07.adoc#switch-run[Switch the image and run]
+** xref:module-07.adoc##layers[Troubleshooting updates]
 
 * xref:module-08.adoc[8. Embedding credentials in an image]
 ** xref:module-08.adoc#add-creds[Embedding emergency credentials]
@@ -41,7 +44,7 @@
 ** xref:module-08.adoc#switch-creds[Changing the virtual machine image]
 ** xref:module-08.adoc#user-test[Test the changes]
 
-* xref:module-09.adoc[9. Deploying a bootc virtual machine with Anaconda]
+* xref:module-09.adoc[9. Deploying a virtual machine with Anaconda]
 ** xref:module-09.adoc#build[Building the installer iso]
 ** xref:module-09.adoc#run[Starting the installation]
 ** xref:module-09.adoc#test[Testing]
