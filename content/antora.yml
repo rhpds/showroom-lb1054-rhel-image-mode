@@ -1,12 +1,12 @@
 name: modules
-title: "LB1054: Unleashing the power of image mode for RHEL"
+title: "LB1054: Unleashing The Power of Image Mode for RHEL"
 version: master
 nav:
   - modules/ROOT/nav.adoc
 
 asciidoc:
   attributes:
-    lab_name: "I'm the lab_name var"
+    lab_name: "LB1054 - Unleashing The Power of Image Mode for RHEL"
     release-version: master
     page-pagination: true
     my_var: "foo"

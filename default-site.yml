@@ -1,7 +1,7 @@
 ---
 site:
-  title: Showroom Template Demo
-  url: https://redhat-scholars.github.io/course-template
+  title: LB1054 - Unleashing The Power of Image Mode for RHEL
+  url: https://github.com/rhpds/showroom-lb1054-rhel-image-mode
   start_page: modules::index.adoc
 
 content:
