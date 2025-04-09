@@ -9,32 +9,24 @@ a virtual machine from it. `qcow2` is a standard file format used by the Linux v
 To deploy our bootc image as a host, we need to get the contents of the image onto a disk. While `bootc` 
 handles those mechanics, the actual creation of a physical disk, virtual disk, or cloud image are handled 
 by other standard tools. For example, Anaconda can be used with bootc images for physical or virtual hosts 
-like you would today, but without the `%packages` block we use today. In this lab, we'll use the `bootc-image-builder` tool which can create various different disk image types and call `bootc` to deploy the image contents.
+like you would today. 
+
+In this lab, we'll use the `bootc-image-builder` tool which can create various different disk image types and call `bootc` to deploy the image contents. This is a variant of the Image Builder tooling you are already familiar with, just containerized and with `bootc` built in.
 
 You may have noticed the bootc image we've created does not include any login credentials. Not a 
 typical concern for an application container, but as a host we will very likely need to interact
-at some point.
-
-Since we are defining an image to be shared by multiple hosts in multiple different environments,
+at some point. Since we are defining an image to be shared by multiple hosts in multiple different environments,
 users and authentication is likely to be handled at the deployment stage, not the build stage.
 
 TIP: There are cases where it may be useful for a user and credentials to be added to an image, 
 as a 'break glass' emergency login for example.
 
-To add a user during the conversion to a disk image, you need add the credentials to the config file used by `bootc-image-builder` to create the final disk image.
+To add a user during the deployment to a disk image, the credentials are put into the config file used by `bootc-image-builder` to create the final disk image.
 
-We'll generate a new ssh key for use during the lab
-
+An ssh key pair was generated for use during this lab, you can view the public part like this for later use.
 [source,bash,role="execute",subs=attributes+]
 ----
-ssh-keygen -f ~/.ssh/id_rsa -N ""
-----
-
-You can view the public part like this:
-
-[source,bash,role="execute",subs=attributes+]
-----
-cat ~/.ssh/id_rsa.pub
+cat ~/.ssh/*.pub
 ----
 ....
 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAuXnpoluye+KM+9tvIAdHf+F0IHh+K73tlcjEG8LJRB lab-user@hypervisor
@@ -42,7 +34,7 @@ ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAuXnpoluye+KM+9tvIAdHf+F0IHh+K73tlcjEG8LJRB
 NOTE: This is only a sample and this public key will not work in your environment
 
 You can now create a file called `config-qcow2.toml` with the following contents, replacing "SSHKEY" 
-in the `key` field with the contents of `~/.ssh/id_rsa.pub` from your system:
+in the `key` field with the contents of public key from your system.
 
 [source,bash,role="execute",subs=attributes+]
 ----
@@ -58,12 +50,14 @@ groups = ["wheel"]
 key = "SSHKEY"
 ----
 
-This configuration blueprint creates a user in the resulting virtual machine with the login `{vm_user}`, the password `{vm_user_pass}` and the ssh key of the user on the lab host.
+This configuration blueprint creates a user in the wheel group with the login `{vm_user}`, the password `{vm_user_pass}` and the ssh key of the user on the lab host.
 
 [#create]
 == Create the disk image
 
-To convert from an OCI image to a disk image, we have a special version of image builder that has support for `bootc`. This `bootc-image-builder` itself runs as a container, and as a result needs additional capabilities and to be run as `root`. As `bootc-image-builder` accesses local storage to find the source image, we will need to copy our image from user storage to system storage. The `podman image scp` command can do this for us, as well as copying to various different targets. When executed with a source but without a destination as below, the default is local system storage.
+To create a bootable disk image from an OCI image, we have a special version of image builder that has support for `bootc`. This `bootc-image-builder` itself runs as a container, and as a result needs additional capabilities and to be run as `root`. 
+
+As `bootc-image-builder` accesses local storage to find the source image, we will need to copy our image from user storage to system storage. The `podman image scp` command can do this for us, as well as copying to various different targets. When executed with a source but without a destination as below, the default is local system storage.
 
 [source,bash,role="execute",subs=attributes+]
 ----
@@ -83,10 +77,11 @@ sudo podman run --rm --privileged \
   --volume /var/lib/containers/storage:/var/lib/containers/storage \
   registry.redhat.io/rhel9/bootc-image-builder:latest \
   --type qcow2 \
+  --local \
   {registry_hostname}/httpd
 ----
 
-A brief explanation of the arguments used for `podman` and `bootc-image-builder`:
+A brief explanation of the arguments used for `podman run` and `bootc-image-builder`:
 
   * `--rm` -> do not keep the build container after execution finishes
   * `--privileged` -> add capabilities required to build the image
@@ -96,9 +91,10 @@ A brief explanation of the arguments used for `podman` and `bootc-image-builder`
 After the image builder version, these arguments passed to `bootc-image-builder`:
 
   * `--type qcow2` -> the type of image to build
+  * `--local` -> uses system container storage to find the image, this will be the default as of 9.6.
   * `{registry_hostname}/httpd` -> the bootc image we are unpacking into the qcow2 disk
 
-Once this completes, you will find the image is the `qcow2/` directory:
+Once this completes, you will find the image in the `qcow2/` directory:
 
 [source,bash,role="execute",subs=attributes+]
 ----
@@ -118,7 +114,7 @@ Since we provided the QCOW2 type to `bootc-image-builder`, the resulting disk im
 sudo cp qcow2/disk.qcow2 /var/lib/libvirt/images/qcow-vm.qcow2
 ----
 
-The creation of KVM virtual machines is out of scope for this lab, but the core of the `virt-install` command used is `--import` which skips the install process and creates the VM based on the provided disk image. 
+The creation of KVM virtual machines is out of scope for this lab, but the core of the `virt-install` command used is `--import` which skips any install process and creates the VM around the provided disk image. 
 
 [source,bash,role="execute",subs=attributes+]
 ----
@@ -158,7 +154,7 @@ virsh --connect qemu:///system list
 Congratulations, you are running a bootc virtual machine!  Now that the virtual machine is up 
 and running, you can see if the webserver behaves as expected.
 
-NOTE: Until the VM finishes booting, you will get name resolution errors from `curl`. You can either wait and retry or monitor the progress of the boot by connecting to the serial console via `virsh``.
+NOTE: Until the VM finishes booting, you will get name resolution errors from `curl`. You can either wait and retry or monitor the progress of the boot by connecting to the serial console via `virsh``. Or try using `watch` and looking for the results below.
 
 [source,bash,role="execute",subs=attributes+]
 ----
@@ -202,10 +198,9 @@ Current booted image: node.g94th.g94th.gcp.redhatworkshops.io/httpd:latest <1>
     Image digest: sha256:99694ce76cedd1fa58250c4e5ee6deeb4d91993b89054793394cda31b1d046ab
 No rollback image present
 ....
+<1> This section details the name of the image, the version with creation timestamp, and the SHA256 digest from the registry. This digest should match the previous output from `skopeo`. 
 
-This status provides information about the images on the host. There are 3 different images that may be available on a bootc host: the booted image, the staged image, and the rollback image. We'll discuss the latter two images later in the lab, but look at the booted image info:
-
-<1> This section details the name of the image currently running, the version with creation timestamp, and the SHA256 digest from the registry. This digest should match the previous output from `skopeo`. This status provides several ways to identify and validate the image in use.
+This status provides information about the images on the host. There are 3 different images that may be available on a bootc host: the booted image, the staged image, and the rollback image. We'll discuss the latter two images later in the lab. The booted image is what's currently defined as the active environment. The image name here is what `bootc` tracks to detect any updates that come available. 
 
 You can explore the virtual machine before moving on to the next section:
 
@@ -214,7 +209,7 @@ You can explore the virtual machine before moving on to the next section:
 
 Our services are running, but how can we tell that we are on system and not running a container? 
 
-First, `bootc` can tell you directly if it's being run on an image mode host or not. If `bootc` were to be installed and run on a non-bootc host, `bootc status` will show all `null` values if run on a non-bootc enabled host. 
+First, `bootc` tells you directly if it's being run on an image mode host or not. If `bootc` were to be installed and run on a non-bootc host, `bootc status` will show all `null` values instead of the output seen here. 
 
 For other ways, we can look at how the system was started, let's look at kernel command line.
 
@@ -227,7 +222,6 @@ BOOT_IMAGE=(hd0,gpt3)/boot/ostree/default-6fe9dddacaf5c3232ba2332010aa7442e0a6d0
 ....
 
 We can see in the kernel command line some clear ties to an `ostree` partition, which is how images are stored and managed on a bootc host. We'll talk more about that later.
-
 
 One other obvious difference for bootc hosts is the layout of the filesystem. 
 
@@ -257,4 +251,4 @@ Before proceeding, make sure you have logged out of the virtual machine:
 logout
 ----
 
-The prompt should look like `[lab-user@multi-cloud-base-infra-g94th-vm ~]$` before continuing.
+The prompt should look like `[lab-user@bastion ~]$ ` before continuing.

@@ -6,14 +6,14 @@ In this lab, you'll look at rollbacks and examine how bootc handles directories 
 == Rolling back changes to the virtual machine
 [NOTE] 
 ====
-You should still be logged into the bootc VM (the prompt should look like `[lab@qcow-vm ~]$`), if not log back in now.
+You should still be logged into the bootc VM (the prompt should look like ` [{vm_user}@localhost ~]$`), if not log back in now.
 [source,bash,role="execute",subs=attributes+]
 ----
 ssh {vm_user}@qcow-vm
 ----
 ====
 
-We have a new built-in option available to image mode systems that typically takes more preparation with package mode operations: the rollback. 
+We have a new built-in option available to image mode systems that typically takes more preparation with package mode operations: *the rollback*. 
 
 Since `bootc` manages state on disk, we have the previous working system available to us. Normally, we'd need to have set up snapshots or refer to a backup but `bootc` automatically provides us the rollback built in.
 
@@ -31,10 +31,9 @@ Current rollback image: node.cxdrb.cxdrb.gcp.redhatworkshops.io/httpd <1>
     Image version: 9.20250326.0 (2025-04-04 14:11:45.808515934 UTC)
     Image digest: sha256:1e69b8a519eccf248e235960dd5eef3c5c546226c0000c655126e00e11438519
 ....
+<1> the on-disk deployment before our most recent update.
 
 Looking at the status output, we can see the section marked `rollback`now has image information. There are at most 3 images available at any one time: staged for next deployment, the current booted deployment, and a rollback of the last active deployment. If for some reason you needed to go back further, you can deploy directly from the registry instead.
-
-<1> the fallback image that we're looking for, the image immediately before our most recent update.
 
 Rollbacks are as simple as running one command. Let's get this image back to the previous
 state then we can dig into what happened.
@@ -70,8 +69,7 @@ sudo bootc status --format yaml | grep Order
 
 Feel free to explore the full output of `bootc status --format yaml` on your own.
 
-After the reboot, the `rollback` image will become the booted image, and will also become the new default in the boot order. Before doing so, please make sure you are logged in to the
-virtual machine and not the hypervisor, the prompt should look like `[{vm_user}@localhost ~]$`.
+After the reboot, the `rollback` image will become the booted image, and will also become the new default in the boot order. Before doing so, please make sure you are logged in to the virtual machine and not the hypervisor, the prompt should look like `[{vm_user}@localhost ~]$`.
 
 [source,bash,role="execute",subs=attributes+]
 ----
@@ -104,9 +102,9 @@ to where we put content and how we serve it in Apache.
 ----
 FROM registry.redhat.io/rhel9/rhel-bootc:9.5
 
-ADD etc/ /etc
-
 RUN dnf install -y httpd
+
+ADD etc/ /etc
 
 RUN <<EOF #<1>
     set -euo pipefail
@@ -118,16 +116,19 @@ RUN echo "Hello Red Hat Summit 2025!!" > /usr/share/www/html/index.html
 
 RUN systemctl enable httpd.service
 ----
-<1> Added line to run several commands using the heredoc format instead of using the `&` operator to join multiple commands
+<1> Runs several commands using the heredoc format instead of using the `&` operator to join multiple commands
 
 Let's break down that new `RUN` directive.
 
 The `httpd` package drops content in `/var/www` by default, and on bootc systems
-`/var` is machine local. For this example, we want to control web content in the image, 
-we need to move it to somewhere under `bootc` control. In our Containerfile, we move 
+`/var` is machine local. For this example, to manage web content via the image, 
+we need to move it to somewhere under `bootc` control. We move 
 the default package contents to a new location in `/usr` then update the Apache 
-configuration to serve pages from this new directory. We've also changed the echo line 
-to create the index.html in the new location.
+configuration to serve pages from this new directory. 
+
+Since the heredoc support for containerfiles essentially reads it as a mini-bash script, using `set -euo pipefail` will cause any errors in these commands to bubble up and stop the build. This way we don't need to wait to catch an error on the host to start troubleshooting.
+
+We've also changed the echo line to create the index.html in the new docroot location.
 
 Rebuild the image with our new configuration and index page. Since this is a rebuild, podman will reuse the 
 existing layers if there are no changes. This makes updates faster and take less space. Notice the push to the registry also only pushes those layers that contain changes.
@@ -174,7 +175,7 @@ Pass --all to see loaded but inactive timers, too.
 
 Instead of waiting for this timer to trigger, we can immediately apply the new update and reboot.
 
-Since we rolled back to an image that did not include our drop-in file for `sudo`, we will be prompted for our password. The drop-in file doesn't have any local changes, so updated (and presence) is based on the image deployed. This is another thing to keep top of mind when moving between images, especially during a rollback.
+Since we rolled back to an image that did not include our drop-in file for `sudo`, we will be prompted for our password. The drop-in file doesn't have any local changes, so updates (and presence) are based on the image deployed, like our new web page. This is another thing to keep top of mind when moving between images, especially during a rollback.
 
 [source,bash,role="execute",subs=attributes+]
 ----
@@ -197,7 +198,7 @@ Remember that the update will detail what layers are new, removed, or added, but
 [#testing]
 == Testing the changes
 
-We can check for our new web page from the lab host (`[lab-user@multi-cloud-base-infra-cxdrb-vm ~]$`):
+We can check for our new web page from the lab host (`[lab-user@bastion ~]$ `):
 
 [source,bash,role="execute",subs=attributes+]
 ----
