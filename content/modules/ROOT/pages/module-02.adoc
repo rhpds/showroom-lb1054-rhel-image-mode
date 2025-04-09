@@ -54,15 +54,14 @@ RUN systemctl enable httpd.service
 
 Let's talk about the effects of these changes from the application container definition:
 
-  * The `FROM` field is now pointing to the Red Hat Enterprise Linux 9.5 bootc image instead of the UBI base image.
-  This new bootc image is a complete version of RHEL 9.5, much like the KVM image available on the Customer Portal. This 
-  image includes all of the OS components to run as a host as well as the new `bootc` commands. It is built using `ostree`
-  to facilitate the transactional updates that marks an image mode deployment from a package mode host.
+  * The `FROM` field is now pointing to the Red Hat Enterprise Linux 9.5 bootc image instead of the UBI base image. 
+  
+  This new bootc image is a complete version of RHEL 9.5, much like the KVM image available on the Customer Portal. This image includes all of the OS components to run as a host as well as the new `bootc` command. It is built using `ostree` to facilitate the transactional updates that marks an image mode deployment from a package mode host.
   
   * `RUN systemctl enable httpd.service` replaces the `ENTRYPOINT`.  
+
   To start the `httpd` service at host startup as you use `systemctl` would with any other host. There's no 
-  need to specify an executable that should be run when the container is started by a container engine like 
-  podman. 
+  need to specify an executable that should be run when a container engine like podman starts the container. 
 
 [#build]
 == Build the first bootc image
@@ -81,10 +80,11 @@ The arguments we pass to `podman` are:
 
 You will see `podman` process each line of the Containerfile just as it would for an application container. Once complete, the last two lines of the output should read like this:
 
-....
+[source,subs=attributes+]
+----
 Successfully tagged {registry_hostname}/httpd
 f1bea10eb37acf2e78a9b01c6242110c1901adbaf40dbce479241c6c735c58da
-....
+----
 
 You have now built your first complete RHEL image as a bootc image!
 
@@ -103,8 +103,6 @@ We have a registry available within the lab environment we can push our image to
 podman push {registry_hostname}/httpd
 ----
 
-That's all there is to designing and building a complete operating system. Start with a base, then add software and 
-related configurations. You not only have the record of that work you can put under source control in the form of the 
-Containerfile, you also have the binary image stored and versioned in the registry.
+That's all there is to designing and building a complete operating system. Start with a base, then add software and related configurations. You not only have the record of that work you can put under source control in the form of the Containerfile, you also have the binary image stored and versioned in the registry.
 
 You've built your first bootc image, and it's now published for use. How do we get from here to a running system?

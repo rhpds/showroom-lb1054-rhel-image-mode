@@ -1,6 +1,6 @@
 = Updating bootc systems
 
-In this lab, you will learn how to create updated images and apply them to bootc hosts. 
+In this lab, you will learn how to add or update software in images and apply them to bootc hosts. 
 
 [#update-container]
 == Updating the bootc image
@@ -10,7 +10,7 @@ do to our systems. Not requiring a password every time we use sudo might be some
 admins to do. We may also need to put notices on logins or present info in the MOTD. Let's make 
 some changes to how the system behaves. While we're at it, lets update the index page too.
 
-First, let's set up a directory structure that mimics `/etc` on our lab host and create the 
+First, let's set up a directory structure that mimics `/etc` and create the 
 files we need inside it. This allows us to add all the configs at once with a single command and in 
 a single layer of the image.
 
@@ -64,14 +64,15 @@ Now that we have our new configs, we can add them to the Containerfile and rebui
 ----
 FROM registry.redhat.io/rhel9/rhel-bootc:9.5
 
+RUN dnf install -y httpd
+
 ADD etc/ /etc # <1>
 
-RUN dnf install -y httpd
 RUN echo "Hello Red Hat Summit 2025!!" > /var/www/html/index.html
 
 RUN systemctl enable httpd.service
 ----
-<1> Copies the local `etc/` contents we just created into `/etc` in the image
+<1> Copies all the local `etc/` contents we just created into `/etc` in the image
 
 If you aren't familiar, the `ADD` directive has some extra capabilities over the `COPY` command. Where `COPY` only works on a single file, `ADD` can work on complete directories or even unpack tar files. This can be very useful when dealing with multiple files and directories that all start from the same place, but could make the Containerfile a little opaque if folks are unfamiliar with the syntax and the results.
 
@@ -168,7 +169,7 @@ After a short wait, log back into the system and and you should see the message 
 ssh {vm_user}@qcow-vm
 ----
 
-We can check on our sudoers policy change as well. You shouldn't be prompted for you password:
+We can check on our sudoers policy change as well. You shouldn't be prompted for a password for any `sudo` commands since the user is in the `wheel` group.
 [source,bash,role="execute",subs=attributes+]
 ----
 sudo cat /etc/motd
