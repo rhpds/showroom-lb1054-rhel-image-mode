@@ -13,10 +13,10 @@ Anaconda is typically used via the boot ISO shipped by Red Hat. There are severa
 
 For this section of the lab, we'll focus on creating a boot ISO that includes the kickstart. The configuration of Anaconda via kickstart will be the same, regardless of how it is presented to the host being installed. This means you can incorporate bootc hosts into an existing kickstart infrastructure fairly seamlessly.
 
-To create the ISO with an embedded kickstart, we will use `bootc-image-builder`. Make sure you have the bootc image to be installed available in the lab registry.
+To create the ISO with an embedded kickstart, we will use `bootc-image-builder`. Make sure you have the bootc image to be installed available in system storage.
 [source,bash,role="execute",subs=attributes+]
 ----
-podman push {registry_hostname}/httpd
+sudo podman images {registry_hostname}/httpd
 ----
 
 [#kickstart]
@@ -79,12 +79,15 @@ sudo podman run --rm --privileged \
   --volume /var/lib/containers/storage:/var/lib/containers/storage \
   registry.redhat.io/rhel9/bootc-image-builder:latest \
   --type anaconda-iso \
+  --local \
   {registry_hostname}/httpd
 ----
 For this type of output, `bootc-image-builder` will first create the ISO image from the same source repos as the container it's passed. This ensures we get matching versions on the installer and the image to be installed regardless of the host's OS version, eg a RHEL 10 ISO for a RHEL 10 image.
 
 [NOTE]
 ====
+This could take 7+ minutes to complete.
+
 You may see the following error from `logger` during the ISO build, these are harmless side effects during the intiram creation for the ISO.
 
 `logger: socket /dev/log: No such file or directory`
@@ -102,10 +105,22 @@ This will download the image during the install process and use `bootc` to deplo
 
 Having created a custom installation ISO, we can boot a virtual machine and automatically install our image. We are once again using `virt-install` to create a local VM, the main difference is that here we are using the `--location` option to pass the local path of the ISO file and `--extra-args` to pass the path to the kickstart file to Anaconda. This emulates inserting a physical disk into a bare metal system. We'll let `virsh` attach to the serial console created by `--extra-args` so we can see what happens.
 
+To get the volume ID of the ISO to tell anaconda where to find the kickstart file on disk, use the `file` command.
+[source,bash,role="execute",subs=attributes+]
+----
+file bootiso/install.iso
+----
+....
+bootiso/install.iso: ISO 9660 CD-ROM filesystem data (DOS/MBR boot sector) 'RHEL-9-5-BaseOS-x86_64' (bootable)
+....
+
+Copy the ISO to a location that `virsh` can find it, like with the QCOW2 disk image. This is mainly about permissions and access.
 [source,bash,role="execute",subs=attributes+]
 ----
 sudo cp bootiso/install.iso /var/lib/libvirt/images/install.iso
 ----
+
+Now we're ready to start the install from our ISO image.
 
 NOTE: This could take 2+ minutes to complete.
 
@@ -121,6 +136,16 @@ virt-install --connect qemu:///system \
   --osinfo rhel9-unknown \
   --noreboot
 ----
+
+Once the initial boot is complete, you'll get to see anaconda at work. At various points you'll see output like below, showing anaconda reading the kickstart, and calling `bootc` to deploy the image to the disk layout it created.
+....
+Starting installer, one moment...
+anaconda 34.25.5.9-1.el9 for Red Hat Enterprise Linux 9.5 started.
+
+Starting automated install.Saving storage configuration...
+
+Deployment starting: /run/install/repo/container
+....
 
 When prompted, hit `Enter` to finish the installation and shut down the VM
 ....
@@ -164,7 +189,7 @@ curl http://iso-vm
 
 The output should be "Hello Red Hat Summit 2025!!"
 
-ou can now login to the virtual machine.
+You can now login to the virtual machine.
 
 [source,bash,role="execute",subs=attributes+]
 ----
@@ -191,7 +216,7 @@ No rollback image present
 [#switch]
 == Switching to a different transport method
 
-One thing that immediately is different in the `bootc status` output is that the deployed image image is a local path, not the container naming convention we've been using. Let's dig a little deeper by pulling the `spec` block from the full YAML output.
+One thing that immediately is different in the `bootc status` output is that the deployed image image is a local path, not the registry naming convention we've been using. Let's dig a little deeper by pulling the `spec` block from the full YAML output.
 
 [source,bash,role="execute",subs=attributes+]
 ----
@@ -207,11 +232,13 @@ spec:
   bootOrder: default
 ----
 
-The `transport` line refers to how containers are pulled and are defined as part of the OCI standards. The `oci` transport type means this is a single image located at a specific local path. This path existed in the install environment, but isn't a container storage location we'd use on a live system. In fact, this image may not exist on the system at all since `/run` is a tmpfs location.
+The `transport` line refers to how containers are pulled and are defined as part of the OCI standards. The `oci` transport type means this is a single image located at a specific local path. This path existed in the install environment, but isn't a container storage location we'd use on a live system. In fact, this image may not exist on the system at all since `/run` is a tmpfs location. 
 
-So far in this lab, we have been using the `registry` transport, which requires network access. To manage updates in an offline manner, say for disconnected environments or those with intermittent connectivity, we can use `containers-storage` which refers to the locally configured storage locations. A full discussion of transports and their associated uses and configuration is outside the scope of this lab.
+It's important to note that not having the container image on the system doesn't affect `bootc` operations at runtime. Once installed or an update is pulled and deployed, the container image is no longer needed. Rollbacks are to the deployment on disk, not to an image.
 
-To keep with the theme of offline usage, let's provide an update via local storage. We can use `skopeo` to copy images from one location to another. Here, we can use it to copy from a registry to the host. We could also use `skopeo` to do the same thing from a USB drive or other media.
+So far in this lab, we have been using the `registry` transport, which requires network access. To manage updates in an offline manner, say for disconnected environments or those with intermittent connectivity, we could replicate the OCI transport and present an image at the same location. But we can also use the standard system storage locations with the `containers-storage` transport. A full discussion of transports and their associated uses and configuration is outside the scope of this lab. 
+
+For this lab, let's provide an update via standard system storage. We can use `skopeo` to copy images from one location to another. Here, we will use it to copy from the lab registry to the host, but it can also be used to copy to and from a USB drive or other media.
 
 We need to be sure to use `sudo` to copy into the system storage location and not the user's.
 
@@ -220,7 +247,7 @@ We need to be sure to use `sudo` to copy into the system storage location and no
 sudo skopeo copy docker://{registry_hostname}/httpd  containers-storage:{registry_hostname}/httpd
 ----
 
-Switch our installation to use the new container image, using the `--transport` flag to let bootc know we want to use local container storage for this operation.
+Switch our installation to use the new container image, using the `--transport` flag to let bootc know we want to use local container storage for update tracking.
 
 [source,bash,role="execute",subs=attributes+]
 ----
@@ -236,7 +263,7 @@ Fetched layers: 0 B in 15 seconds (0 B/s)
 
 At this point, the "new" installation has been prepared and will be started at next boot of the virtual machine.
 
-The last step for the change to take is to reboot the virtual machine. Before doing it, please make sure you are logged in to the virtual machine and not the hypervisor (the prompt should look like `[core@localhost ~]$ `):
+The last step for the change to take effect is to reboot the virtual machine. Before doing so, please make sure you are logged in to the virtual machine and not the hypervisor (the prompt should look like `[core@localhost ~]$ `):
 
 [source,bash,role="execute",subs=attributes+]
 ----
@@ -266,11 +293,6 @@ Current rollback image: oci:/run/install/repo/container
     Image digest: sha256:315cec3b391047bcf931d3c55f381fc0d60f090e1cb5116f85af0401240c17d4
 ....
 
-In the status you can see `bootc` is now tracking local container storage for updates. Further updates would then be provided on media presented to the host, like a USB drive or DVD. You could use skopeo sync a registry repository to media as well as copy it from the media to the local storage on the host. These images are visible to podman as well. 
+In the status you can see `bootc` is now tracking local container storage for updates, not the filesystem path. Further updates just need to be copied there for `bootc` to recognize and apply. You could use `skopeo` sync a registry repository to media, like a USB drive, as well as copy it from the media to the local storage on the host. 
 
-[source,bash,role="execute",subs=attributes+]
-----
-sudo podman images
-----
-
-There are a range of possibilities for edge devices, disconnected networks, and any other arenas where direct connectivity to a registry over a network isn't possible or desired. 
+This opens a range of possibilities to deliver installations and updates for edge devices, disconnected networks, and any other arenas where direct connectivity to a registry over a network isn't possible or desired. 
