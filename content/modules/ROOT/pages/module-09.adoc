@@ -68,7 +68,14 @@ When creating an ISO with an embedded kickstart however, `bootc-image-builder` w
 
 The command looks nearly identical to the one used to create the virtual machine QCOW2 disk in the earlier exercise, using a new output `type`.
 
-NOTE: This could take 4+ minutes to complete.
+[NOTE]
+====
+This could take 7+ minutes to complete.
+
+You may see the following error from `logger` during the ISO build, these are harmless side effects during the intiram creation for the ISO.
+
+`logger: socket /dev/log: No such file or directory`
+====
 
 [source,bash,role="execute",subs=attributes+]
 ----
@@ -82,18 +89,9 @@ sudo podman run --rm --privileged \
   --local \
   {registry_hostname}/httpd
 ----
-For this type of output, `bootc-image-builder` will first create the ISO image from the same source repos as the container it's passed. This ensures we get matching versions on the installer and the image to be installed regardless of the host's OS version, eg a RHEL 10 ISO for a RHEL 10 image.
+For this output type there are two stages, `bootc-image-builder` will first create the ISO image from the same source repos as the container it's passed. This ensures we get matching versions on the installer and the image to be installed regardless of the host's OS version, eg a RHEL 10 ISO for a RHEL 10 image.
 
-[NOTE]
-====
-This could take 7+ minutes to complete.
-
-You may see the following error from `logger` during the ISO build, these are harmless side effects during the intiram creation for the ISO.
-
-`logger: socket /dev/log: No such file or directory`
-====
-
-While that builds the ISO, let's talk about the change needed to use `bootc` with a kickstart file in a network based install.  If you wanted to deploy from a container registry, just add the new `ostreecontainer` command. In that kickstart, `ostreecontainer` takes the `url` argument with the full location and name of the image:
+While the ISO builds, let's talk about the change needed to use `bootc` with a kickstart file in a network based install.  If you wanted to deploy from a container registry, just add the new `ostreecontainer` command. In that kickstart, `ostreecontainer` takes the `url` argument with the full location and name of the image:
 ----
 ostreecontainer --url quay.io/myorg/myimage:mytag
 ----
