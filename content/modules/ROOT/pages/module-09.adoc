@@ -35,6 +35,14 @@ ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAuXnpoluye+KM+9tvIAdHf+F0IHh+K73tlcjEG8LJRB
 ....
 NOTE: This is only a sample and this public key will not work in your environment
 
+You can now create a file called `config-iso.toml` with the following contents, replacing "SSHKEY" 
+in the `key` field with the contents of public key from your system.
+
+[source,bash,role="execute",subs=attributes+]
+----
+nano config-iso.toml
+----
+
 [source,yaml,role="execute",subs=attributes+]
 ----
 [customizations.installer.kickstart]
@@ -70,7 +78,7 @@ The command looks nearly identical to the one used to create the virtual machine
 
 [NOTE]
 ====
-This could take 7+ minutes to complete.
+This could take 6+ minutes to complete.
 
 You may see the following error from `logger` during the ISO build, these are harmless side effects during the intiram creation for the ISO.
 
@@ -84,7 +92,7 @@ sudo podman run --rm --privileged \
   --volume .:/output \
   --volume ./config-iso.toml:/config.toml \
   --volume /var/lib/containers/storage:/var/lib/containers/storage \
-  registry.redhat.io/rhel9/bootc-image-builder:latest \
+  registry.redhat.io/rhel9/bootc-image-builder:9.5 \
   --type anaconda-iso \
   --local \
   {registry_hostname}/httpd
