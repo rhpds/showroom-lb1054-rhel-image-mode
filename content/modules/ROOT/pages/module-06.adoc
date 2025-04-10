@@ -20,9 +20,9 @@ Let's explore how that can work by creating a new Containerfile with the followi
 nano Containerfile.wp
 ----
 
-[source,textinfo,role="execute",subs=attributes+]
+[source,dockerfile,role="execute",subs=attributes+]
 ----
-FROM {registry_host}/httpd
+FROM {registry_hostname}/httpd
 
 RUN dnf -y install lynx
 
@@ -194,9 +194,9 @@ Let's add a `heredoc` to our Containerfile to tell systemd to mask the httpd ser
 ----
 nano Containerfile.wp
 ----
-[source,textinfo,role="execute",subs=attributes+]
+[source,dockerfile,role="execute",subs=attributes+]
 ----
-FROM {registry_host}/httpd
+FROM {registry_hostname}/httpd
 
 RUN dnf -y install lynx
 
