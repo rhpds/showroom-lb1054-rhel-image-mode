@@ -220,7 +220,7 @@ And of course push it to the local registry:
 
 [source,bash,role="execute",subs=attributes+]
 ----
-podman push {registry_hostname}/caddy-wp:v2
+podman push {registry_hostname}/caddy-wp:V2
 ----
 
 The name of the image has stayed the same, but we've now added the `V2` to add some semantic versioning. Tags are part of how `bootc` keeps track of images, which is important when it comes to updates. Since this is a new tag, we would need to `switch` to it in order to use it, just like we did the first time. This might be fine, especially since we've turned off auto-updates. If this should be an update, then we can add a tag to this new image that matches what `bootc` is currently tracking. Remember from the OS base image discussion that an image can have multiple tags associated with it, and `bootc` can track an single tag for an image.
