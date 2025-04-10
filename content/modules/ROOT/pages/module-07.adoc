@@ -22,7 +22,7 @@ nano Containerfile.wp
 
 [source,dockerfile,role="execute",subs=attributes+]
 ----
-FROM {registry_host}/httpd
+FROM {registry_hostname}/httpd
 
 RUN dnf -y install lynx
 
@@ -196,7 +196,7 @@ nano Containerfile.wp
 ----
 [source,dockerfile,role="execute",subs=attributes+]
 ----
-FROM {registry_host}/httpd
+FROM {registry_hostname}/httpd
 
 RUN dnf -y install lynx
 
