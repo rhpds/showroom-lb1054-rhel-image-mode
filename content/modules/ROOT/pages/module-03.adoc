@@ -75,7 +75,7 @@ sudo podman run --rm --privileged \
   --volume .:/output \
   --volume ./config-qcow2.toml:/config.toml \
   --volume /var/lib/containers/storage:/var/lib/containers/storage \
-  registry.redhat.io/rhel9/bootc-image-builder:latest \
+  registry.redhat.io/rhel9/bootc-image-builder:9.5 \
   --type qcow2 \
   --local \
   {registry_hostname}/httpd
