@@ -4,138 +4,128 @@ In addition to simplifying updates and providing native rollback, operating RHEL
 makes it simple to quickly change the purpose of a running system. This means experimenting with new 
 versions of application components or testing OS updates is as simple as applying any other image change.
 
-In this lab we'll explore this feature as well as expand on the ideas of layering common in the application 
-container world.
+In this lab we'll explore this feature as well as expand on the idea of standardized builds and derived images.
 
 [#write-containerfiles]
-== Writing advanced containerfiles
-
-NOTE: All of the files for this exercise are provided in the examples folder and we'll be operating on those 
-directly. If a command doesn't operate, or a file doesn't look correct, check to make sure you are in the right 
-directory.
+== Building from the standard base
 
 Instead of just running a webserver, what if we needed to run WordPress instances, and our developers need
-those to be containerized? Image mode hosts are suitable for a wide range of use cases beyond directly hosting 
-applications, and acting as a container host is one of those. In fact, the work that preceded image mode was 
-largely focused on the role of container hosting. 
+those to be containerized? Normally, that would start the hunt for available infrastructure, an examination of the software needed to support the containers, changes to automation, deploying new machines to support the testing, and a lot of back and forth between the different teams. 
 
-On the host system (make sure the prompt shows `[lab-user@hypervisor rh-summit-2024-lb1506]$`), you can
-change to the `wordpress-quadlet` directory to examine the new Containerfile.
+With image mode, a few new options are available. The developers can take a standard build that has `podman` available, add their container configurations, and pick an existing host to run the image. If they have problems or if they need to change the host back to it's previous role, that's as simple as a rollback.
 
-[source,bash]
+Let's explore how that can work by creating a new Containerfile with the following contents.
+[source,bash,role="execute",subs=attributes+]
 ----
-cd examples/wordpress-quadlet
-cat Containerfile.wp
+nano Containerfile.wp
 ----
-Using container tooling to create images let's us take advantage of layers and inheritance in our standard 
-build process. Different teams and work directly from images built by others, rather than by integrating after 
-the fact. Notice our `FROM` line is the image you've been working on throughout the lab. This means that every 
-bit of customization and software you've installed previously will be available on the host built from this new 
-definition. 
 
-[source,dockerfile]
+[source,dockerfile,role="execute",subs=attributes+]
 ----
-FROM summit.registry/lb1506:bootc
+FROM {registry_host}/httpd
 
 RUN dnf -y install lynx
 
-ADD etc/ /etc
-ADD usr/ /usr
+ADD wordpress-quadlet/etc/ /etc
+ADD wordpress-quadlet/usr/ /usr
 ----
 
-For an 'advanced` configuration, this doesn't have a lot of content, what's happening?
+For an 'advanced` configuration, this doesn't have a lot in it, what's happening?
 
-Remember the `ADD` directive pulls full directories into the image at build time. So all of the work here is 
+First up, the FROM line references the image you've been building and updating during this lab. This means that every bit of customization and software you've installed previously will be available on the host built from this new definition. This style of derived images is something very powerful for collaborating while keeping teams focused on their needs. Different teams can work directly from images built by and certified by others, rather than starting from scratch or trying to integrate and apply controls at the end of a long build process.
+
+Remember the `ADD` directive pulls full directories into the image at build time. So most of the work here is 
 somehow being done in `/usr` or `/etc`, let's see what's in there.
 
-
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-ls -lahR etc/ usr/
+ls -lahR wordpress-quadlet/etc/ wordpress-quadlet/usr/
 ----
 
-The advanced part is the use of quadlets to run containers. A full description of quadlets is outside the scope 
-of this workshop, but in short, a quadlet is a way to run a container (or group of containers in this case) as a 
-systemd service. In `wordpress-quadlet/etc/` we have a configuration file for the caddy server, a Golang HTTPS server acting as a proxy, 
-and a file of environment variables to be passed to the quadlet.
+The "hidden" part is the use of quadlets to run containers. A full description of quadlets is outside the scope 
+of this lab, but in short, a quadlet is a way to run a container (or group of containers in this case) as a systemd service. 
 
-In `wordpress-quadlet/usr/share/containers/systemd/` we have all of the files that define the quadlet. The `.container` file defines 
-each of the containers for systemd to run. These are typical systemd unit files, aside from the `[Container]` block which 
-is unique to quadlets.
+In `wordpress-quadlet/etc/` we have a configuration file for the caddy server, a Golang HTTPS server acting as a proxy, and a file of environment variables to be passed to the quadlet.
+
+In `wordpress-quadlet/usr/share/containers/systemd/` we have all of the files that define the quadlet. The `.container` file defines each of the containers for systemd to run. These are typical systemd unit files, aside from the `[Container]` block which is unique to quadlets.
 
 Feel free to explore these files and directories before moving on.
 
 [#build]
 == Build and push the image
 
-When we build this image, we will use a new tag. You may have noticed in the previous exercises, the name of the image has stayed the same. 
-Tags are how `bootc` keeps track of images, which is why each of the previous changes we made showed up as updates. 
+When we build this image, we will use a new name to denote it's new purpose. Your naming and tagging conventions should aim to convey information to the people who need them as much as providing hooks to automate and control visibility to hosts.
 
-
-In this exercise, we're going to look at a different way to change what operating system in installed on a host, so this image will get a new tag. 
-Tagging is a powerful but somewhat subjective way to both provide information about an image and to control what's visible to any particular image 
-mode host. Most of that discussion is out of scope for this lab, but we'll explore how to use an alternate image here. 
-Remember the format for the `--tag` flag is `<registry>/<repository>:<tag>`.
-
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-podman build --file Containerfile.wp --tag summit.registry/lb1506:bootc-wp
+podman build --file Containerfile.wp --tag {registry_hostname}/caddy-wp
 ----
-
 And of course push it to the local registry:
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-podman push summit.registry/lb1506:bootc-wp
+podman push {registry_hostname}/caddy-wp
 ----
 
-Notice that even though we used a new tag for this image, the push still used cached layers. This is an advantage of stacking images in a standard 
-build design.
+Notice that even though we used a new tag for this image, the push still used cached layers. This is an advantage of stacking images in a standard build design.
 
 You can now login to the virtual machine:
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-ssh lab-user@qcow-vm
+ssh {vm_user}@qcow-vm
 ----
 
 [#switch-run]
 == Switch and test the image
 
-After the new container image has been pushed to the local registry, you can `switch` the bootc image to the WordPress one. This 
-`bootc` command is how we change what image to follow for updates. From here on, any changes made to the orginal `bootc` tagged image 
-would not show up as an available update, only changes to the new `bootc-wp` image.
+After the new container image has been pushed to the local registry, you can `switch` the bootc image to the WordPress one. This `bootc` command is how we change what image to follow for updates. From here on, any changes made to the original `httpd` image would not show up as an available update, only changes to the new `caddy-wp` image.
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-sudo bootc switch summit.registry/lb1506:bootc-wp
+sudo bootc switch {registry_hostname}/caddy-wp
 ----
+
+From a status perspective, a switch looks the same as an update. There's a new deployment that's been staged and prepared for the next boot, but the image reference is completely different.
+[source,bash,role="execute",subs=attributes+]
+----
+sudo bootc status
+----
+....
+Current staged image: node.bfsl9.gcp.redhatworkshops.io/caddy-wp
+    Image version: 9.20250326.0 (2025-04-10 13:38:12.835421182 UTC)
+    Image digest: sha256:54431e1daa50f82ebe11fc63b868537422e09f5c5f54ed5761893bfb974ec76c
+Current booted image: node.bfsl9.gcp.redhatworkshops.io/httpd
+    Image version: 9.20250326.0 (2025-04-10 13:33:46.181009833 UTC)
+    Image digest: sha256:fe3bcda02181be7aa8f49cf2f96915faeb9fd9fa5cc72e1146848f637e8d0a2d
+No rollback image present
+....
 
 As usual, after the command is done you need to reboot the virtual machine
 for the changes to take effect. Before doing that, please make sure you are logged in to the
-virtual machine and not the hypervisor (the prompt should look like `[lab-user@qcow-vm ~]#`):
+virtual machine and not the hypervisor (the prompt should look like `[{vm_user}@qcow-vm ~]$`):
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
 sudo systemctl reboot
 ----
 
 After a short while, you can log back in to the virtual machine:
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-ssh lab-user@qcow-vm
+ssh {vm_user}@qcow-vm
 ----
 
 [#layers]
 == Troubleshooting layered builds
 
-Check on the status of our newly created quadlet by checking the caddy proxy server. 
+Check on the status of our newly created quadlet by checking the caddy proxy server and what it inherited from the standard build. 
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-sudo systemctl status caddy.service
-sudo journalctl -t caddy
+sudo systemctl status caddy.service --no-pager
+journalctl -t caddy
 ----
 ....
 Jul 24 14:40:30 qcow-vm systemd[1]: caddy.service: Failed with result 'exit-code'.
@@ -150,9 +140,9 @@ when it tried to start.  What's going on? The answer to both lies in the image w
 
 If we check the status of Apache, we can see that it is indeed running and listening on port 80.
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-sudo systemctl status httpd.service
+systemctl status httpd.service --no-pager
 ----
 
 If you look at the original Containerfile, you'll recall we set Apache to start at boot:
@@ -165,7 +155,7 @@ RUN systemctl enable httpd.service
 Since local changes to /etc are kept by `bootc` when changing images, httpd stayed enabled on 
 this new host as well. Let's disable it and restart caddy.
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
 sudo systemctl disable --now httpd.service
 sudo systemctl restart caddy.service
@@ -180,20 +170,95 @@ Removed "/etc/systemd/system/multi-user.target.wants/httpd.service".
 ....
 
 It looks like caddy started, let's check to see that it's passing requests to the WordPress 
-container in the quadlet. Curl will dump a mess of HTML and we don't have a GUI, but that's why we installed the Lynx browser
+container in the quadlet. Curl will dump a mess of HTML and we don't have a GUI, but that's why we installed the Lynx browser.
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
 lynx localhost
 ----
 
-You should see the WordPress configuration dialog box. You can hit `Q` (Shift + q) to quit lynx.
+You should see the WordPress configuration dialog box. You can hit `Q` (Shift + q) to quit lynx and then log out of the VM.
+[source,bash,role="execute",subs=attributes+]
+----
+logout
+----
 
-Feel free to explore the virtual machine before moving on to the next section.
+== Disable the service and rebuild with new tag?
 
-Before proceeding, make sure you have logged out of the virtual machine:
+That solution is fine for this host, but how to we fix it in the image? The answer depends on the goal and how container layers operate.  
 
-[source,bash]
+The simplest solution would be to stop the service from starting. You may find there are other services in the base image you may want to disable in certain downstream images as well. One way to stop these sorts of services from activation, especially those defined in `/usr/lib/systemd/system`, is with masking.
+
+Let's add a `heredoc` to our Containerfile to tell systemd to mask the httpd service and the bootc update timer.
+[source,bash,role="execute",subs=attributes+]
+----
+nano Containerfile.wp
+----
+[source,dockerfile,role="execute",subs=attributes+]
+----
+FROM {registry_host}/httpd
+
+RUN dnf -y install lynx
+
+ADD wordpress-quadlet/etc/ /etc
+ADD wordpress-quadlet/usr/ /usr
+
+RUN <<EOF
+     set -euo pipefail
+     systemctl mask httpd.service 
+     systemctl mask bootc-fetch-apply-updates.timer 
+EOF
+----
+
+This means these services won't even be able to be started manually.
+
+[source,bash,role="execute",subs=attributes+]
+----
+podman build --file Containerfile.wp --tag {registry_hostname}/caddy-wp:V2
+----
+And of course push it to the local registry:
+
+[source,bash,role="execute",subs=attributes+]
+----
+podman push {registry_hostname}/caddy-wp:v2
+----
+
+The name of the image has stayed the same, but we've now added the `V2` to add some semantic versioning. Tags are part of how `bootc` keeps track of images, which is important when it comes to updates. Since this is a new tag, we would need to `switch` to it in order to use it, just like we did the first time. This might be fine, especially since we've turned off auto-updates. If this should be an update, then we can add a tag to this new image that matches what `bootc` is currently tracking. Remember from the OS base image discussion that an image can have multiple tags associated with it, and `bootc` can track an single tag for an image.
+
+Since we haven't been adding tags to any of our builds, they all have the default latest tag automatically applied.
+[source,bash,role="execute",subs=attributes+]
+----
+podman images {registry_hostname}/caddy-wp
+----
+You can see both of our caddy images, and the tags associated with them. To make `V2` appear as an available update, add the `latest` tag to that image. The first image is the one to operate on, and the second is the complete target name you want to apply. This can be used in a lot of ways, for example to build all images locally without any registry, organization, and tag info and add that only to specific builds that are ready to be pushed to a registry.
+
+[source,bash,role="execute",subs=attributes+]
+----
+podman image tag {registry_hostname}/caddy-wp:V2 {registry_hostname}/caddy-wp:latest
+----
+
+This changed the tag locally, so we need to push the newly tagged image to the registry to pick upt the change there. You'll notice all of the layers are skipped since this is really just a metadata change.
+[source,bash,role="execute",subs=attributes+]
+----
+podman push {registry_hostname}/caddy-wp:latest
+----
+
+Logging back into the VM, you should see an update available for the `caddy-wp` image with the one layer that has our change.
+[source,bash,role="execute",subs=attributes+]
+----
+ssh {vm_user}@qcow-vm
+----
+
+[source,bash,role="execute",subs=attributes+]
+----
+sudo bootc update
+----
+Feel free to apply the update and test the changes.
+
+
+Before proceeding to the next exercise, make sure you have logged out of the virtual machine:
+
+[source,bash,role="execute",subs=attributes+]
 ----
 logout
 ----
@@ -202,7 +267,3 @@ Easy updates, rollbacks, and image switching are part of the core improvements t
 image mode systems. Layering is an important part of the design of standard builds and can have some 
 downstream effects as well. Just like stacking configuration management, thinking through the idea of 
 layered builds can be powerful.
-
-But those aren't the only advantages or design considerations when thinking about 
-how to best use image mode in your workflows. Let's explore a few more advanced topics next.
-
