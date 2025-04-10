@@ -1,304 +1,194 @@
-= Creating an install ISO with Anaconda
+= Exploring alternate user creation methods
 
-In this section you will learn the basics of deploying a bootc image using Anaconda and an all in one `iso` image.
+In this exercise, you'll explore other ways to create users and add credentials to image mode hosts.
 
-Anaconda is the official Red Hat Enterprise Linux installer which uses Kickstart as it's scripting language. Recently, Kickstart received a new command called `ostreecontainer` to support `bootc` installs.
+[#add-creds]
+== Embedding emergency credentials into an image
+In the previous exercises, we've created users and added ssh keys at install time, either via a blueprint file 
+passed to `bootc-image-builder` or via kickstart to Anaconda. There are many ways and many reasons why handling 
+users would happen at any particular stage of the process, during deployment or after install via network authentication.
 
-[#build]
-== Building an installation ISO with the bootc image
+In addition to adding users during the creation of a host system, via `bootc-image-builder`, `cloud-init`, or some other means, we can also create users during
+the creation of the bootc image. This can be useful in certain cases where particular emergency users are needed in environments with limited connectivity. 
+These users and credentials would be tied to the image, which means controlling how secrets are used in the build are important to understand before going 
+down this path. You will want to explore more before making this choice in your own environment.
 
-Using `bootc-image-builder` is great for creating virtual and cloud images, but for bare metal installs we need a different approach. In those environments, the Anaconda installer is still widely used, automated by kickstart files.
+On the host system (make sure the prompt shows `[lab-user@hypervisor rh-summit-2024-lb1506]$`), and are in the `rh-summit-2024-lb1506` directory
 
-Anaconda is typically used via the boot ISO shipped by Red Hat. There are several ways to get a host to boot from this ISO image including PXE or HTTP Boot over the network, as an image via IMPI, or a physical disk inserted into a drive. The kickstart file for an install can also be provided in several ways, including over a network or as part of the ISO. 
-
-For this section of the lab, we'll focus on creating a boot ISO that includes the kickstart. The configuration of Anaconda via kickstart will be the same, regardless of how it is presented to the host being installed. This means you can incorporate bootc hosts into an existing kickstart infrastructure fairly seamlessly.
-
-To create the ISO with an embedded kickstart, we will use `bootc-image-builder`. Make sure you have the bootc image to be installed available in system storage.
-[source,bash,role="execute",subs=attributes+]
+[source,bash]
 ----
-sudo podman images {registry_hostname}/httpd
-----
-
-[#kickstart]
-== Creating the kickstart file
-
-All of  the kickstart is standard fare. Anaconda will create the partitions and filesystems on disk, enable services, and create users just like it would in any other install. You even have access to the `%pre` and `%post` blocks too, the only missing section from any kickstart you have today is the `%packages` list. The full details of kickstart is beyond the scope of this lab, but the example will create a single partition, create a user, start `ssh`, disable the firewall, and reboot once finished. Oh, and of course deploy our image.
-
-The kickstart file is added to the ISO via a customization block of the `bootc-image-builder` config file. Add the following to `config-iso.toml` and save the file. Be sure to add the ssh public key for your system.
-
-[source,bash,role="execute",subs=attributes+]
-----
-cat ~/.ssh/*.pub
-----
-....
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAuXnpoluye+KM+9tvIAdHf+F0IHh+K73tlcjEG8LJRB lab-user@hypervisor
-....
-NOTE: This is only a sample and this public key will not work in your environment
-
-You can now create a file called `config-iso.toml` with the following contents, replacing "SSHKEY" 
-in the `key` field with the contents of public key from your system.
-
-[source,bash,role="execute",subs=attributes+]
-----
-nano config-iso.toml
+cd ~/rh-summit-2024-lb1506
 ----
 
-[source,yaml,role="execute",subs=attributes+]
+[#secrets]
+== Using podman secrets at build time
+
+We will use an addtional feature of `podman` to get the credentials we want to embed passed to the image safely.
+
+You can now edit the `Containerfile` to match the following:
+
+[source,dockerfile]
 ----
-[customizations.installer.kickstart]
-contents = """
-# Basic setup
-text
+FROM registry.redhat.io/rhel9/rhel-bootc:9.4
 
-network --bootproto=dhcp --device=link --activate 
+COPY certs/004-summit.conf /etc/containers/registries.conf.d/004-summit.conf
 
-# Basic partitioning
-clearpart --all --initlabel --disklabel=gpt
-reqpart --add-boot
-part / --grow --fstype xfs
+COPY templates/30-auth-system.conf /etc/ssh/sshd_config.d/30-auth-system.conf # <1>
+RUN mkdir -p /usr/ssh # <2>
+RUN --mount=type=secret,id=SSHPUBKEY cat /run/secrets/SSHPUBKEY > /usr/ssh/root.keys && chmod 0600 /usr/ssh/root.keys # <3>
 
-# No ostreecontainer command needed, instead we lay down the container contents with BIB in the ISO
+ADD etc/ /etc
 
-firewall --disabled
-services --enabled=sshd
+RUN dnf install -y httpd
 
-user --name={vm_user} --groups=wheel --password={vm_user_pass}
-sshkey --username=core "SSHKEY"
+RUN <<EOF
+    mv /var/www /usr/share/www
+    sed -i 's-/var/www-/usr/share/www-' /etc/httpd/conf/httpd.conf
+EOF
 
-# Only inject a SSH key for root
-rootpw --iscrypted locked
-"""
+RUN echo "Hello Red Hat Summit Connect 2024!!" > /usr/share/www/html/index.html
+
+RUN systemctl enable httpd.service
 ----
+<1> `COPY templates...` -> adds a drop in for sshd to look for public keys in users global `.keys` file, note this is in `/usr` and tied to the image
+<2> `RUN mkdir -p /usr/ssh` -> create the new keys directory in `/usr`
+<3> `RUN --mount=type=secret,id=SSHPUBKEY cat /run/secrets/SSHPUBKEY .. ` -> mounts the secret passed via build to a file only available at build time, then copies the contents
 
-The new `ostreecontainer` command replaces the standard %packages block of the kickstart file that defines what RPMs would be installed by Anaconda. This replaces that set of RPM transactions with the `bootc` image to be unpacked and installed to disk.  
+You can now build the new container image with the following command, note the `--secret` argument. This is the connection to the `RUN` directive 
+in the Containerfile. At build time, `podman` will take the file passed and create a temporary secret which we can mount only during the build process. 
+The `id` of the secret is the filename mounted under `/run/secrets`, which we then can extract the contents for our ssh key.
 
-When creating an ISO with an embedded kickstart however, `bootc-image-builder` will automatically inject the correct `ostreecontainer` directive for the image we pass. This image is embedded in the ISO with the kickstart, which makes this ISO a completely self-contained installer for a single image. 
+We're also going to use a new tag for this image, like we did in the previous `bootc switch` exercise.
 
-The command looks nearly identical to the one used to create the virtual machine QCOW2 disk in the earlier exercise, using a new output `type`.
-
-[NOTE]
-====
-This could take 6+ minutes to complete.
-
-You may see the following error from `logger` during the ISO build, these are harmless side effects during the intiram creation for the ISO.
-
-`logger: socket /dev/log: No such file or directory`
-====
-
-[source,bash,role="execute",subs=attributes+]
+[source,bash]
 ----
-sudo podman run --rm --privileged \
-  --security-opt label=type:unconfined_t \
-  --volume .:/output \
-  --volume ./config-iso.toml:/config.toml \
-  --volume /var/lib/containers/storage:/var/lib/containers/storage \
-  registry.redhat.io/rhel9/bootc-image-builder:9.5 \
-  --type anaconda-iso \
-  --local \
-  {registry_hostname}/httpd
-----
-For this output type there are two stages, `bootc-image-builder` will first create the ISO image from the same source repos as the container it's passed. This ensures we get matching versions on the installer and the image to be installed regardless of the host's OS version, eg a RHEL 10 ISO for a RHEL 10 image.
-
-While the ISO builds, let's talk about the change needed to use `bootc` with a kickstart file in a network based install.  If you wanted to deploy from a container registry, just add the new `ostreecontainer` command. In that kickstart, `ostreecontainer` takes the `url` argument with the full location and name of the image:
-----
-ostreecontainer --url quay.io/myorg/myimage:mytag
+podman build --secret id=SSHPUBKEY,src=/home/lab-user/.ssh/id_rsa.pub --file Containerfile --tag summit.registry/lb1506:bootc-auth
 ----
 
-This will download the image during the install process and use `bootc` to deploy the contents to the disk set up by Anaconda according to the kickstart file. You can boot from the standard boot ISO downloaded from the Customer Portal and pass the kickstart via HTTP, or from a Satellite server. The only change is how software is processed during the install.
+And make sure to push it to the registry:
 
-[#run]
-== Starting the installation with Anaconda in a virtual machine
-
-Having created a custom installation ISO, we can boot a virtual machine and automatically install our image. We are once again using `virt-install` to create a local VM, the main difference is that here we are using the `--location` option to pass the local path of the ISO file and `--extra-args` to pass the path to the kickstart file to Anaconda. This emulates inserting a physical disk into a bare metal system. We'll let `virsh` attach to the serial console created by `--extra-args` so we can see what happens.
-
-To get the volume ID of the ISO to tell anaconda where to find the kickstart file on disk, use the `file` command.
-[source,bash,role="execute",subs=attributes+]
+[source,bash]
 ----
-file bootiso/install.iso
-----
-....
-bootiso/install.iso: ISO 9660 CD-ROM filesystem data (DOS/MBR boot sector) 'RHEL-9-5-BaseOS-x86_64' (bootable)
-....
-
-Copy the ISO to a location that `virsh` can find it, like with the QCOW2 disk image. This is mainly about permissions and access.
-[source,bash,role="execute",subs=attributes+]
-----
-sudo cp bootiso/install.iso /var/lib/libvirt/images/install.iso
+podman push summit.registry/lb1506:bootc-auth
 ----
 
-Now we're ready to start the install from our ISO image.
+[#switch-creds]
+== Changing the virtual machine image
 
-NOTE: This could take 2+ minutes to complete.
+The virtual machine you have been working with during this workshop should still be running. You can check this with
 
-[source,bash,role="execute",subs=attributes+]
-----
-virt-install --connect qemu:///system \
-  --name iso-vm \
-  --disk size=10 \
-  --location /var/lib/libvirt/images/install.iso \
-  --extra-args "inst.ks=hd:LABEL=RHEL-9-5-BaseOS-x86_64:/osbuild.ks console=ttyS0" \
-  --memory 4096 \
-  --graphics none \
-  --osinfo rhel9-unknown \
-  --noreboot
-----
-
-Once the initial boot is complete, you'll get to see anaconda at work. At various points you'll see output like below, showing anaconda reading the kickstart, and calling `bootc` to deploy the image to the disk layout it created.
-....
-Starting installer, one moment...
-anaconda 34.25.5.9-1.el9 for Red Hat Enterprise Linux 9.5 started.
-
-Starting automated install.Saving storage configuration...
-
-Deployment starting: /run/install/repo/container
-....
-
-When prompted, hit `Enter` to finish the installation and shut down the VM
-....
-Installation complete
-
-Use of this product is subject to the license agreement found at:
-/usr/share/redhat-release/EULA
-
-Installation complete. Press ENTER to quit: 
-....
-
-We can now start our new bootc virtual machine.
-
-[source,bash,role="execute",subs=attributes+]
-----
-virsh --connect qemu:///system start iso-vm
-----
-
-Check to make sure the virtual machine running:
-
-[source,bash,role="execute",subs=attributes+]
+[source,bash]
 ----
 virsh --connect qemu:///system list
 ----
-....
- Id   Name                State
-------------------------------------
- 1    qcow-vm                running
- 2    iso-vm                 running
-....
 
-[#test]
-== Test and login to the virtual machine
+And the output should contain a virtual machine called `qcow`.
 
-Like with the previous virtual machine created, you can directly see if the http application is already running on the host:
+Now you can ssh into the virtual machine
 
-[source,bash,role="execute",subs=attributes+]
+[source,bash]
 ----
-curl http://iso-vm
+ssh lab-user@qcow-vm
 ----
 
-The output should be "Hello Red Hat Summit 2025!!"
+We can change to our new image with the embedded `root` credentials
 
-You can now login to the virtual machine.
-
-[source,bash,role="execute",subs=attributes+]
+[source,bash]
 ----
-ssh {vm_user}@iso-vm
+sudo bootc switch summit.registry/lb1506:bootc-auth
 ----
 
-NOTE: If the ssh key is not automatically picked up, use the password defined in the config file at the beginning of this lab (by default `{vm_user_pass}`). 
-This is also the password to use when prompted by `sudo`.
+The output should look something like this:
 
-Once you have logged in, you can inspect the bootc status.
-
-[source,bash,role="execute",subs=attributes+]
 ----
-sudo bootc status
+layers already present: 68; layers needed: 7 (126.7 MB)
+ 452 B [████████████████████] (0s) Fetched layer sha256:2691e6642975            
+Pruned images: 0 (layers: 0, objsize: 58.9 MB)
+Queued for next boot: summit.registry/lb1506:bootc-auth
+  Version: 9.20240721.0
+  Digest: sha256:2afd495b9dd3e72aa4926deb1e738af54e0b1bb935803bc6c107bdd919347167
 ----
-....
-No staged image present
-Current booted image: /run/install/repo/container
-    Image version: 9.20250326.0 (2025-04-03 14:36:38.438935004 UTC)
-    Image digest: sha256:99694ce76cedd1fa58250c4e5ee6deeb4d91993b89054793394cda31b1d046ab
-No rollback image present
-....
+As usual, after the command is done you need to reboot the virtual machine
+for the changes to take effect. Before doing that, please make sure you are logged in to the
+virtual machine and not the hypervisor (the prompt should look like `[lab-user@qcow-vm ~]#`):
 
-[#switch]
-== Switching to a different transport method
-
-One thing that immediately is different in the `bootc status` output is that the deployed image image is a local path, not the registry naming convention we've been using. Let's dig a little deeper by pulling the `spec` block from the full YAML output.
-
-[source,bash,role="execute",subs=attributes+]
-----
-sudo bootc status --format yaml | grep -A 4 spec
-----
-
-[source,yaml]
-----
-spec:
-  image:
-    image: /run/install/repo/container
-    transport: oci
-  bootOrder: default
-----
-
-The `transport` line refers to how containers are pulled and are defined as part of the OCI standards. The `oci` transport type means this is a single image located at a specific local path. This path existed in the install environment, but isn't a container storage location we'd use on a live system. In fact, this image may not exist on the system at all since `/run` is a tmpfs location. 
-
-It's important to note that not having the container image on the system doesn't affect `bootc` operations at runtime. Once installed or an update is pulled and deployed, the container image is no longer needed. Rollbacks are to the deployment on disk, not to an image.
-
-So far in this lab, we have been using the `registry` transport, which requires network access. To manage updates in an offline manner, say for disconnected environments or those with intermittent connectivity, we could replicate the OCI transport and present an image at the same location. But we can also use the standard system storage locations with the `containers-storage` transport. A full discussion of transports and their associated uses and configuration is outside the scope of this lab. 
-
-For this lab, let's provide an update via standard system storage. We can use `skopeo` to copy images from one location to another. Here, we will use it to copy from the lab registry to the host, but it can also be used to copy to and from a USB drive or other media.
-
-We need to be sure to use `sudo` to copy into the system storage location and not the user's.
-
-[source,bash,role="execute",subs=attributes+]
-----
-sudo skopeo copy docker://{registry_hostname}/httpd  containers-storage:{registry_hostname}/httpd
-----
-
-Switch our installation to use the new container image, using the `--transport` flag to let bootc know we want to use local container storage for update tracking.
-
-[source,bash,role="execute",subs=attributes+]
-----
-sudo bootc switch --transport containers-storage {registry_hostname}/httpd
-----
-....
-Fetched layers: 0 B in 15 seconds (0 B/s)                                                      
-  Deploying: done (3 seconds)                                                                  
-  Queued for next boot: ostree-unverified-image:containers-storage:node.z8d2b.gcp.redhatworkshops.io/httpd
-  Version: 9.20250326.0
-  Digest: sha256:315cec3b391047bcf931d3c55f381fc0d60f090e1cb5116f85af0401240c17d4
-....
-
-At this point, the "new" installation has been prepared and will be started at next boot of the virtual machine.
-
-The last step for the change to take effect is to reboot the virtual machine. Before doing so, please make sure you are logged in to the virtual machine and not the hypervisor (the prompt should look like `[core@localhost ~]$ `):
-
-[source,bash,role="execute",subs=attributes+]
+[source,bash]
 ----
 sudo systemctl reboot
 ----
 
-In a short time after that command, you should be able to ssh back to the virtual machine:
+[#user-test]
+== Testing the changes
 
-[source,bash,role="execute",subs=attributes+]
+You can now login to the virtual machine with the newly added root credentials:
+
+[source,bash]
 ----
-ssh {vm_user}@iso-vm
+ssh root@qcow-vm
 ----
 
-And check the bootc status:
+And check once again the status of bootc (no need to use `sudo`, you are root):
 
-[source,bash,role="execute",subs=attributes+]
+[source,bash]
 ----
-sudo bootc status
+bootc status
 ----
-....
-No staged image present
-Current booted image: containers-storage:node.z8d2b.gcp.redhatworkshops.io/httpd
-    Image version: 9.20250326.0 (2025-04-08 18:59:59.167494817 UTC)
-    Image digest: sha256:315cec3b391047bcf931d3c55f381fc0d60f090e1cb5116f85af0401240c17d4
-Current rollback image: oci:/run/install/repo/container
-    Image version: 9.20250326.0 (2025-04-08 18:59:59.167494817 UTC)
-    Image digest: sha256:315cec3b391047bcf931d3c55f381fc0d60f090e1cb5116f85af0401240c17d4
-....
 
-In the status you can see `bootc` is now tracking local container storage for updates, not the filesystem path. Further updates just need to be copied there for `bootc` to recognize and apply. You could use `skopeo` sync a registry repository to media, like a USB drive, as well as copy it from the media to the local storage on the host. 
+The output should look like this:
 
-This opens a range of possibilities to deliver installations and updates for edge devices, disconnected networks, and any other arenas where direct connectivity to a registry over a network isn't possible or desired. 
+[source,yaml]
+----
+apiVersion: org.containers.bootc/v1alpha1
+kind: BootcHost
+metadata:
+  name: host
+spec:
+  image:
+    image: summit.registry/lb1506:bootc-auth
+    transport: registry
+  bootOrder: default
+status:
+  staged: null
+  booted:
+    image:
+      image:
+        image: summit.registry/lb1506:bootc-auth
+        transport: registry
+      version: 9.20240721.0
+      timestamp: null
+      imageDigest: sha256:2afd495b9dd3e72aa4926deb1e738af54e0b1bb935803bc6c107bdd919347167
+    cachedUpdate: null
+    incompatible: false
+    pinned: false
+    ostree:
+      checksum: 6307d9fdc8be3f0c202ce49e311b1d046d6d606dea7bcff51ad5d8910f7887b3
+      deploySerial: 0
+  rollback:
+    image:
+      image:
+        image: summit.registry/lb1506:bootc-wp
+        transport: registry
+      version: 9.20240721.0
+      timestamp: null
+      imageDigest: sha256:af3c6bd4ae7beb9bb10f9846c7bc9d9ba1ede259b4b45e581ddcd97ab2df4380
+    cachedUpdate: null
+    incompatible: false
+    pinned: false
+    ostree:
+      checksum: 543f6c9a5b8e2f354db71adda5db7ca74b53bcb9fdf8c8fcd391e7c66c77062a
+      deploySerial: 0
+  rollbackQueued: false
+  type: bootcHost
+----
+
+Feel free to explore the virtual machine before moving on to the next section, remembering you are now `root`.
+
+Since we've moved away from the WordPress image back to a standard httpd service, you can look for the original 
+index file on disk or via `curl`.
+
+Before proceeding, make sure you have logged out of the virtual machine:
+
+[source,bash]
+----
+logout
+----
