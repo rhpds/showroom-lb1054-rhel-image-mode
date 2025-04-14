@@ -3,103 +3,112 @@
 In this exercise, you'll explore other ways to create users and add credentials to image mode hosts.
 
 [#add-creds]
-== Embedding emergency credentials into an image
-In the previous exercises, we've created users and added ssh keys at install time, either via a blueprint file 
-passed to `bootc-image-builder` or via kickstart to Anaconda. There are many ways and many reasons why handling 
-users would happen at any particular stage of the process, during deployment or after install via network authentication.
+== Embedding user credentials into an image
 
-In addition to adding users during the creation of a host system, via `bootc-image-builder`, `cloud-init`, or some other means, we can also create users during
-the creation of the bootc image. This can be useful in certain cases where particular emergency users are needed in environments with limited connectivity. 
-These users and credentials would be tied to the image, which means controlling how secrets are used in the build are important to understand before going 
-down this path. You will want to explore more before making this choice in your own environment.
+There are many ways and many reasons why handling users would happen at any particular stage of the process, during deployment or after install via network authentication. In the previous exercises, we've created users and added ssh keys at install time, either via a blueprint file passed to `bootc-image-builder` or via kickstart to Anaconda. 
 
-On the host system (make sure the prompt shows `[lab-user@hypervisor rh-summit-2024-lb1506]$`), and are in the `rh-summit-2024-lb1506` directory
+In addition to adding users during the creation of a host system, via `bootc-image-builder`, `cloud-init`, or some other means, we can also create users during the creation of the bootc image. This can be useful in certain cases where a specific user and credential are used for initial system management connectivity or  emergency users are needed in environments with limited connectivity. 
 
-[source,bash]
-----
-cd ~/rh-summit-2024-lb1506
-----
+These users and credentials would be tied to the image, which means controlling how secrets are used in the build are important to understand before going down this path. You will want to explore more before making this choice in your own environment.
+
+For this example, we're going to add an SSH key to `root` in the image, something that might be used for emergency access, and can be then rotated with an update.
+
 
 [#secrets]
 == Using podman secrets at build time
 
-We will use an addtional feature of `podman` to get the credentials we want to embed passed to the image safely.
+So far, we've been copying ssh keys directly into files with editors, which is fine for exercists or small numbers of users. We will use an additional feature of `podman` to inject the credentials into the Containerfile using a more modern method like an external password vault. 
 
-You can now edit the `Containerfile` to match the following:
+First, we'll set up a drop-in file that will configure SSHd to look for user authorized keys in a path controlled by the image. This gives us a way to update credentials later. The drop-in uses the `%u` username match in the search path, so a key that matches the username in `/usr/ssh` would act just like the typical `authorized_keys` file in their home directory.
 
-[source,dockerfile]
+[source,bash,role="execute",subs=attributes+]
 ----
-FROM registry.redhat.io/rhel9/rhel-bootc:9.4
+nano templates/30-auth-system.conf
+----
+....
+AuthorizedKeysFile /usr/ssh/%u.keys .ssh/authorized_keys .ssh/authorized_keys2
+....
 
-COPY certs/004-summit.conf /etc/containers/registries.conf.d/004-summit.conf
+The `podman build` command has an option to pass information into a build in a way that it doesn't get stored in the final image. It will read a file or an environment variable, and make the contents available during the build in a file under mounted under `/run/secrets` on the host. The arguments passed to `podman build --secret` will determine if the source of the secret is a file or an environment variable. To pass more than one secret, you add an additional `--secret` argument.
+
+Inside the build, we can have a `RUN` directive read that file and do something with it. There's a `--mount` option for `RUN` that can be used for a lot of different things, but one of those options is a `secrets` mount type. There are other options for the `RUN` directive, but we'll keep it as simple as we can here.
+
+The `id` is the connection between the `RUN` directive in the Containerfile and the `podman build` command. The `id` of the secret is the filename mounted under `/run/secrets`, which we then can extract the contents for our ssh key. This `id` needs to match in the `podman build` and in the Containerfile.  We'll highlight those in the examples below.
+
+You can now edit the `Containerfile` to match the following. 
+[source,dockerfile,role="execute",subs=attributes+]
+----
+FROM registry.redhat.io/rhel9/rhel-bootc:9.5
 
 COPY templates/30-auth-system.conf /etc/ssh/sshd_config.d/30-auth-system.conf # <1>
 RUN mkdir -p /usr/ssh # <2>
-RUN --mount=type=secret,id=SSHPUBKEY cat /run/secrets/SSHPUBKEY > /usr/ssh/root.keys && chmod 0600 /usr/ssh/root.keys # <3>
-
-ADD etc/ /etc
+RUN --mount=type=secret,id=SSHPUBKEY cat /run/secrets/SSHPUBKEY > /usr/ssh/root.keys \ # <3>
+ && chmod 0600 /usr/ssh/root.keys # <4>
 
 RUN dnf install -y httpd
 
+ADD etc/ /etc
+
 RUN <<EOF
+    set -euo pipefail
     mv /var/www /usr/share/www
     sed -i 's-/var/www-/usr/share/www-' /etc/httpd/conf/httpd.conf
 EOF
 
-RUN echo "Hello Red Hat Summit Connect 2024!!" > /usr/share/www/html/index.html
+RUN echo "Hello Red Hat Summit 2025!!" > /usr/share/www/html/index.html
 
 RUN systemctl enable httpd.service
 ----
 <1> `COPY templates...` -> adds a drop in for sshd to look for public keys in users global `.keys` file, note this is in `/usr` and tied to the image
 <2> `RUN mkdir -p /usr/ssh` -> create the new keys directory in `/usr`
-<3> `RUN --mount=type=secret,id=SSHPUBKEY cat /run/secrets/SSHPUBKEY .. ` -> mounts the secret passed via build to a file only available at build time, then copies the contents
+<3> `RUN --mount=type=secret,id=SSHPUBKEY.. ` -> mounts the file located at the `id`,  only available during this build
+<4> Fixes the permissions on the SSH key
 
-You can now build the new container image with the following command, note the `--secret` argument. This is the connection to the `RUN` directive 
-in the Containerfile. At build time, `podman` will take the file passed and create a temporary secret which we can mount only during the build process. 
-The `id` of the secret is the filename mounted under `/run/secrets`, which we then can extract the contents for our ssh key.
+
+When you build the image, make note of the `--secret` argument.
+
+* `id` -> matches the `RUN` line so we have the file in the right place for use at build
+* `src` -> the file that contains the secret on the host, in this case our SSH public key.
 
 We're also going to use a new tag for this image, like we did in the previous `bootc switch` exercise.
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-podman build --secret id=SSHPUBKEY,src=/home/lab-user/.ssh/id_rsa.pub --file Containerfile --tag summit.registry/lb1506:bootc-auth
+podman build --secret id=SSHPUBKEY,src=.ssh/{guid}.pub --file Containerfile --tag {registry_hostname}/httpd:auth
 ----
 
 And make sure to push it to the registry:
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-podman push summit.registry/lb1506:bootc-auth
+podman push {registry_hostname}/httpd:auth
 ----
 
 [#switch-creds]
 == Changing the virtual machine image
 
-The virtual machine you have been working with during this workshop should still be running. You can check this with
+The virtual machine you have been working with during this lab should still be running. You can check this with
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
 virsh --connect qemu:///system list
 ----
 
-And the output should contain a virtual machine called `qcow`.
+And the output should contain a virtual machine called `qcow-vm`.
 
 Now you can ssh into the virtual machine
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-ssh lab-user@qcow-vm
+ssh {vm_user}@qcow-vm
 ----
 
 We can change to our new image with the embedded `root` credentials
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
-sudo bootc switch summit.registry/lb1506:bootc-auth
+sudo bootc switch {registry_hostname}/httpd:auth
 ----
-
-The output should look something like this:
-
 ----
 layers already present: 68; layers needed: 7 (126.7 MB)
  452 B [████████████████████] (0s) Fetched layer sha256:2691e6642975            
@@ -108,11 +117,12 @@ Queued for next boot: summit.registry/lb1506:bootc-auth
   Version: 9.20240721.0
   Digest: sha256:2afd495b9dd3e72aa4926deb1e738af54e0b1bb935803bc6c107bdd919347167
 ----
+
 As usual, after the command is done you need to reboot the virtual machine
 for the changes to take effect. Before doing that, please make sure you are logged in to the
-virtual machine and not the hypervisor (the prompt should look like `[lab-user@qcow-vm ~]#`):
+virtual machine and not the hypervisor (the prompt should look like `[{vm_user}@qcow-vm ~]$`):
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
 sudo systemctl reboot
 ----
@@ -120,75 +130,35 @@ sudo systemctl reboot
 [#user-test]
 == Testing the changes
 
-You can now login to the virtual machine with the newly added root credentials:
+You can now login to the virtual machine with the newly added *root* credentials:
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
 ssh root@qcow-vm
 ----
 
-And check once again the status of bootc (no need to use `sudo`, you are root):
+And check once again the status of bootc (no need to use `sudo`, you are root!):
 
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
 bootc status
 ----
-
-The output should look like this:
-
-[source,yaml]
-----
-apiVersion: org.containers.bootc/v1alpha1
-kind: BootcHost
-metadata:
-  name: host
-spec:
-  image:
-    image: summit.registry/lb1506:bootc-auth
-    transport: registry
-  bootOrder: default
-status:
-  staged: null
-  booted:
-    image:
-      image:
-        image: summit.registry/lb1506:bootc-auth
-        transport: registry
-      version: 9.20240721.0
-      timestamp: null
-      imageDigest: sha256:2afd495b9dd3e72aa4926deb1e738af54e0b1bb935803bc6c107bdd919347167
-    cachedUpdate: null
-    incompatible: false
-    pinned: false
-    ostree:
-      checksum: 6307d9fdc8be3f0c202ce49e311b1d046d6d606dea7bcff51ad5d8910f7887b3
-      deploySerial: 0
-  rollback:
-    image:
-      image:
-        image: summit.registry/lb1506:bootc-wp
-        transport: registry
-      version: 9.20240721.0
-      timestamp: null
-      imageDigest: sha256:af3c6bd4ae7beb9bb10f9846c7bc9d9ba1ede259b4b45e581ddcd97ab2df4380
-    cachedUpdate: null
-    incompatible: false
-    pinned: false
-    ostree:
-      checksum: 543f6c9a5b8e2f354db71adda5db7ca74b53bcb9fdf8c8fcd391e7c66c77062a
-      deploySerial: 0
-  rollbackQueued: false
-  type: bootcHost
-----
+....
+No staged image present
+Current booted image: node.xzk5f.gcp.redhatworkshops.io/httpd:auth
+    Image version: 9.20250326.0 (2025-04-11 20:31:25.725862994 UTC)
+    Image digest: sha256:808357b866a23b1cfac3d9f22034745807d30b9695eaed5fb5a7598e4eb8f11f
+No rollback image present
+....
 
 Feel free to explore the virtual machine before moving on to the next section, remembering you are now `root`.
 
 Since we've moved away from the WordPress image back to a standard httpd service, you can look for the original 
 index file on disk or via `curl`.
 
-Before proceeding, make sure you have logged out of the virtual machine:
-
-[source,bash]
+[source,bash,role="execute",subs=attributes+]
 ----
 logout
 ----
+
+You've completed the final exercise in the lab. You should have a good baseline for how image mode operates and how it might be of use in your environment. You can find more information about image mode in the Links section at the top of the page.
