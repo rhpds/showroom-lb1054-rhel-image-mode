@@ -4,7 +4,7 @@ You will interact with a total of 3 systems: the primary lab hypervisor, a conta
 
 == Lab diagram
 
-* Draw something functional build host, container storage, image consumer maybe include how they'll interact with each protocol wise (ssh, https)*
+image::lab-diagram.png[]
 
 == System purpose
 
