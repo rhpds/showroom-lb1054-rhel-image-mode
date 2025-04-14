@@ -1,269 +1,179 @@
-= Repurposing a bootc host
+= Applying RHEL updates to the bootc base images
 
-In addition to simplifying updates and providing native rollback, operating RHEL in image mode also 
-makes it simple to quickly change the purpose of a running system. This means experimenting with new 
-versions of application components or testing OS updates is as simple as applying any other image change.
+We looked at how to add new software packages to a bootc host, but what about applying updates to packages in the base image? Using `dnf update` during a container build is not a good practice, and can lead to inconsistent images based on package visibility at build time.
 
-In this lab we'll explore this feature as well as expand on the idea of standardized builds and derived images.
+Red Hat publishes updated base images to the Container Catalog regularly, to understand how to make the best use of them, we need to revisit tagging.
 
-[#write-containerfiles]
-== Building from the standard base
+* Insert a screenshot of the dropdown in the catalog
 
-Instead of just running a webserver, what if we needed to run WordPress instances, and our developers need
-those to be containerized? Normally, that would start the hunt for available infrastructure, an examination of the software needed to support the containers, changes to automation, deploying new machines to support the testing, and a lot of back and forth between the different teams. 
+[#naming]
+== What's in a name?
 
-With image mode, a few new options are available. The developers can take a standard build that has `podman` available, add their container configurations, and pick an existing host to run the image. If they have problems or if they need to change the host back to it's previous role, that's as simple as a rollback.
+Let's do a quick refresher on what makes up the 'name' of a container image. The official convention for images is <host>/<namespace>/<repository>:<tag>.
+[cols="~,~"]
+|===
+|host
+|domain name of the registry in use, can include a port number if needed (eg `localhost:5000`)
 
-Let's explore how that can work by creating a new Containerfile with the following contents.
-[source,bash,role="execute",subs=attributes+]
-----
-nano Containerfile.wp
-----
+|namespace
+|(optional) usually the username or organization name within the registry, can represent other things depending on the registry service. _Not to be confused with Linux namespaces within the kernel._ (eg `quay.io/prometheus`)
+
+|repository
+|what most folks think of as the 'name' of an image, but technically a space for a collection of images, typically related. these days, this collection is typically just iterations of a single image over time, not totally different but related images (eg `rhel-bootc`) 
+
+|tag
+|(optional) identifier for a specific image in the repository, used to convey some information about the contents of the image, has a default of `latest` (eg `rhel-bootc:9.5`)
+
+|digest
+|not part of the naming, but how images and tags in registries are actually tracked via SHA256, can be used to pull specific images directly (eg `rhel-bootc@sha256:ee593d553dcda33f424bc0d262fef35b207e0a7df1dce3a0e25584b139c4a4ef`)
+|===
+
+So far, we have be using `registry.redhat.io/rhel9/rhel-bootc:9.5` in the FROM line of the Containerfile, so let's break that down according to our table:
+
+[cols="~,~"]
+|===
+|host
+|registry.redhat.io
+
+|namespace
+|rhel9
+
+|repository
+|rhel-bootc
+
+|tag
+|9.5
+|===
+
+The earlier RHEL 9.4 images are also in the same `rhel-bootc` repository of the `rhel9` namespace. This lets us keep the base images organized in a few different ways by using tags.
+
+The table below describes the tags associated with the `rhel-bootc` repository.
+[cols="~,~"]
+|===
+|latest
+|the most recent minor release build *within a major* release
+
+|9.5
+|the most recent build of a *particular minor* release
+
+|9.5-1742979700
+|a *timestamped build* of a minor release
+|===
+
+[TIP]
+====
+Those timestamps are in UNIX epoch time, so the `date` command can show us when a build was made.
+....
+date -d@1742979700
+Wed Mar 26 05:01:40 AM EDT 2025
+....
+====
+
+At the time of writing, `latest` would point to `9.5`, the most current minor release of RHEL 9. Both of these also point to `9.5-1742979700`, as seen in the screenshot above. This also means that should a new timestamped build be published to the catalog, the `9.5` tag would automatically update to that next new build. 
+
+If that new build were a new minor release (eg 9.6), the `latest` tag would point to that minor. Knowing what tags point to what images, and therefor what software is available in your base image is important. 
+
+[#tag-build]
+== Using specific versions of base images
+Let's build a new image using an older tag that still checks out to get an idea of how this works and how you can use it to control updates.
 
 [source,dockerfile,role="execute",subs=attributes+]
 ----
-FROM {registry_hostname}/httpd
+FROM registry.redhat.io/rhel9/rhel-bootc:9.5-1739946498
 
-RUN dnf -y install lynx
+RUN dnf install -y httpd
+RUN echo "Hello Red Hat" > /var/www/html/index.html
 
-ADD wordpress-quadlet/etc/ /etc
-ADD wordpress-quadlet/usr/ /usr
+RUN systemctl enable httpd.service
 ----
-
-For an 'advanced` configuration, this doesn't have a lot in it, what's happening?
-
-First up, the FROM line references the image you've been building and updating during this lab. This means that every bit of customization and software you've installed previously will be available on the host built from this new definition. This style of derived images is something very powerful for collaborating while keeping teams focused on their needs. Different teams can work directly from images built by and certified by others, rather than starting from scratch or trying to integrate and apply controls at the end of a long build process.
-
-Remember the `ADD` directive pulls full directories into the image at build time. So most of the work here is 
-somehow being done in `/usr` or `/etc`, let's see what's in there.
+[NOTE]
+====
+Since we're using a tag that doesn't change in the registry, we know that we will always use the same base image no matter the state of the build host. If we had fewer tags or ones that moved more frequently, this is where we could use the SHA256 digest instead of a tag to be specific about image use.
+====
 
 [source,bash,role="execute",subs=attributes+]
 ----
-ls -lahR wordpress-quadlet/etc/ wordpress-quadlet/usr/
+podman build --file Containerfile --tag {registry_hostname}/base-check
 ----
+You should notice that this build starts by pulling the base image, since it's different than what we have been using.  Since this is just an older version, you will still see shared layers being skipped.
 
-The "hidden" part is the use of quadlets to run containers. A full description of quadlets is outside the scope 
-of this lab, but in short, a quadlet is a way to run a container (or group of containers in this case) as a systemd service. 
+[#test]
+== Locally testing builds
+In our normal workflow, we'd push this image to the registry and then update a bootc host to see any changes. Since these are, after all, container images, we can inspect them locally. Being able to run certain kinds of tests using a container engine without needing to fully boot an image can be a useful tool, especially when iterating on a build.
 
-In `wordpress-quadlet/etc/` we have a configuration file for the caddy server, a Golang HTTPS server acting as a proxy, and a file of environment variables to be passed to the quadlet.
-
-In `wordpress-quadlet/usr/share/containers/systemd/` we have all of the files that define the quadlet. The `.container` file defines each of the containers for systemd to run. These are typical systemd unit files, aside from the `[Container]` block which is unique to quadlets.
-
-Feel free to explore these files and directories before moving on.
-
-[#build]
-== Build and push the image
-
-When we build this image, we will use a new name to denote it's new purpose. Your naming and tagging conventions should aim to convey information to the people who need them as much as providing hooks to automate and control visibility to hosts.
+Let's check the version of the kernel that was shipped in this older base image by running a shell in a temporary container.
 
 [source,bash,role="execute",subs=attributes+]
 ----
-podman build --file Containerfile.wp --tag {registry_hostname}/caddy-wp
+podman run --rm -i {registry_hostname}/base-check rpm -qa httpd kernel*
 ----
-And of course push it to the local registry:
+The arguments we pass to `podman run` are:
 
-[source,bash,role="execute",subs=attributes+]
-----
-podman push {registry_hostname}/caddy-wp
-----
-
-Notice that even though we used a new tag for this image, the push still used cached layers. This is an advantage of stacking images in a standard build design.
-
-You can now login to the virtual machine:
-
-[source,bash,role="execute",subs=attributes+]
-----
-ssh {vm_user}@qcow-vm
-----
-
-[#switch-run]
-== Switch and test the image
-
-After the new container image has been pushed to the local registry, you can `switch` the bootc image to the WordPress one. This `bootc` command is how we change what image to follow for updates. From here on, any changes made to the original `httpd` image would not show up as an available update, only changes to the new `caddy-wp` image.
-
-[source,bash,role="execute",subs=attributes+]
-----
-sudo bootc switch {registry_hostname}/caddy-wp
-----
-
-From a status perspective, a switch looks the same as an update. There's a new deployment that's been staged and prepared for the next boot, but the image reference is completely different.
-[source,bash,role="execute",subs=attributes+]
-----
-sudo bootc status
-----
+  * `--rm` -> remove the container immediately on exit
+  * `-i` -> pipe stdin into the container
+  * `{registry_hostname}/base-check` -> the image we just built to launch the container
+  * `rpm -qa httpd kernel*` -> the command to read from stdin and run inside the temporary container
 ....
-Current staged image: node.bfsl9.gcp.redhatworkshops.io/caddy-wp
-    Image version: 9.20250326.0 (2025-04-10 13:38:12.835421182 UTC)
-    Image digest: sha256:54431e1daa50f82ebe11fc63b868537422e09f5c5f54ed5761893bfb974ec76c
-Current booted image: node.bfsl9.gcp.redhatworkshops.io/httpd
-    Image version: 9.20250326.0 (2025-04-10 13:33:46.181009833 UTC)
-    Image digest: sha256:fe3bcda02181be7aa8f49cf2f96915faeb9fd9fa5cc72e1146848f637e8d0a2d
-No rollback image present
+kernel-modules-core-5.14.0-503.23.2.el9_5.x86_64
+kernel-core-5.14.0-503.23.2.el9_5.x86_64
+kernel-modules-5.14.0-503.23.2.el9_5.x86_64
+kernel-5.14.0-503.23.2.el9_5.x86_64
+httpd-2.4.62-1.el9_5.2.x86_64
 ....
 
-As usual, after the command is done you need to reboot the virtual machine
-for the changes to take effect. Before doing that, please make sure you are logged in to the
-virtual machine and not the hypervisor (the prompt should look like `[{vm_user}@qcow-vm ~]$`):
-
+You may be tempted to check the kernel version with something like `uname -r`, let's see what happens
 [source,bash,role="execute",subs=attributes+]
 ----
-sudo systemctl reboot
-----
-
-After a short while, you can log back in to the virtual machine:
-
-[source,bash,role="execute",subs=attributes+]
-----
-ssh {vm_user}@qcow-vm
-----
-
-[#layers]
-== Troubleshooting layered builds
-
-Check on the status of our newly created quadlet by checking the caddy proxy server and what it inherited from the standard build. 
-
-[source,bash,role="execute",subs=attributes+]
-----
-sudo systemctl status caddy.service --no-pager
-journalctl -t caddy
+podman run --rm -i {registry_hostname}/base-check uname -r
 ----
 ....
-Jul 24 14:40:30 qcow-vm systemd[1]: caddy.service: Failed with result 'exit-code'.
-Jul 24 14:40:30 qcow-vm systemd[1]: Failed to start Caddy Quadlet.
-
-Jul 24 14:40:25 qcow-vm caddy[1347]: Error: cannot listen on the TCP port: listen tcp4 :80: 
-Jul 24 14:40:27 qcow-vm caddy[1780]: Error: cannot listen on the TCP port: listen tcp4 :80:
+5.14.0-503.31.1.el9_5.x86_64
 ....
 
-We weren't prompted for our sudo password, but it looks like our new caddy server couldn't bind to port 80 
-when it tried to start.  What's going on? The answer to both lies in the image we built from. 
+Since this is a container, and not a VM, we will see the host's system kernel version not the one from the RPM list.
 
-If we check the status of Apache, we can see that it is indeed running and listening on port 80.
+This sort of local testing is often called the 'inner loop' in software development, something not previously available to the design and development of standard operating system builds. For some testing, you need to launch a container fully to get `systemd` started instead of running it interactively, like checking on the httpd service.
 
-[source,bash,role="execute",subs=attributes+]
+While not every nuance of system behavior can be tested in a container (eg SELinux polices), this still can greatly reduce the amount of time usually needed to test changes Local VMs, like used in this lab, can be a very good way to create a full local testing environment for new bootc images. 
+
+[#tag-update]
+== Updating the base image using tags
+To update the base image, we only need to change the tag to the latest timestamp variant (as of the writing of this exercise) and build the image:
+[source,dockerfile,role="execute",subs=attributes+]
 ----
-systemctl status httpd.service --no-pager
-----
+FROM registry.redhat.io/rhel9/rhel-bootc:9.5-1742979700
 
-If you look at the original Containerfile, you'll recall we set Apache to start at boot:
+RUN dnf install -y httpd
+RUN echo "Hello Red Hat" > /var/www/html/index.html
 
-[source,dockerfile]
-----
 RUN systemctl enable httpd.service
 ----
 
-Since local changes to /etc are kept by `bootc` when changing images, httpd stayed enabled on 
-this new host as well. Let's disable it and restart caddy.
-
 [source,bash,role="execute",subs=attributes+]
 ----
-sudo systemctl disable --now httpd.service
-sudo systemctl restart caddy.service
-sudo systemctl status caddy.service
+podman build --file Containerfile --tag {registry_hostname}/base-check
+----
+You should notice that this build skips *all* of the layers when pulling the base image. While it's a different tag, it's the same image as the one we've used throughout the exercises. Multiple tags can refer to a single image, allow you to convey meaningful information about an image. 
+
+You should also notice that we completely rebuilt the image, since the change in the container definition was at the very first instruction. This means the whole cache is skipped, unlike the previous builds in this lab.
+
+Now let's check the package versions in this base image using the same commands as before, but with our new image.
+[source,bash,role="execute",subs=attributes+]
+----
+podman run --rm -i {registry_hostname}/base-check rpm -qa httpd kernel*
 ----
 ....
-Removed "/etc/systemd/system/multi-user.target.wants/httpd.service".
-
-● caddy.service - Caddy Quadlet
-     Loaded: loaded (/usr/share/containers/systemd/caddy.container; generated)
-     Active: active (running) since Wed 2024-07-24 14:42:21 UTC; 6s ago
+kernel-modules-core-5.14.0-503.33.1.el9_5.x86_64
+kernel-core-5.14.0-503.33.1.el9_5.x86_64
+kernel-modules-5.14.0-503.33.1.el9_5.x86_64
+kernel-5.14.0-503.33.1.el9_5.x86_64
+httpd-2.4.62-1.el9_5.2.x86_64
 ....
 
-It looks like caddy started, let's check to see that it's passing requests to the WordPress 
-container in the quadlet. Curl will dump a mess of HTML and we don't have a GUI, but that's why we installed the Lynx browser.
+There's a newer kernel provided by the updated base image, but the version of httpd installed is the same. We're using repositories directly from the Red Hat services, any packages we add during the container build will be whatever is most recently published. You can also update to a newer minor version by simply changing the tag to match.
 
-[source,bash,role="execute",subs=attributes+]
-----
-lynx localhost
-----
+// ANCHOR NEW BRANCH HERE
 
-You should see the WordPress configuration dialog box. You can hit `Q` (Shift + q) to quit lynx and then log out of the VM.
-[source,bash,role="execute",subs=attributes+]
-----
-logout
-----
+Making use of the tags in the catalog provides you with more options to control and trace your base images. To do the same with the packages you install on top of the base, you can use something like Satellite to control the visibility of new packages at build time. This combination can eliminate any drift between base images and installed packages from repositories.
 
-== Disable the service and rebuild with new tag?
-
-That solution is fine for this host, but how to we fix it in the image? The answer depends on the goal and how container layers operate.  
-
-The simplest solution would be to stop the service from starting. You may find there are other services in the base image you may want to disable in certain downstream images as well. One way to stop these sorts of services from activation, especially those defined in `/usr/lib/systemd/system`, is with masking.
-
-Let's add a `heredoc` to our Containerfile to tell systemd to mask the httpd service and the bootc update timer.
-[source,bash,role="execute",subs=attributes+]
-----
-nano Containerfile.wp
-----
-[source,dockerfile,role="execute",subs=attributes+]
-----
-FROM {registry_hostname}/httpd
-
-RUN dnf -y install lynx
-
-ADD wordpress-quadlet/etc/ /etc
-ADD wordpress-quadlet/usr/ /usr
-
-RUN <<EOF
-     set -euo pipefail
-     systemctl mask httpd.service 
-     systemctl mask bootc-fetch-apply-updates.timer 
-EOF
-----
-
-This means these services won't even be able to be started manually.
-
-[source,bash,role="execute",subs=attributes+]
-----
-podman build --file Containerfile.wp --tag {registry_hostname}/caddy-wp:V2
-----
-And of course push it to the local registry:
-
-[source,bash,role="execute",subs=attributes+]
-----
-podman push {registry_hostname}/caddy-wp:V2
-----
-
-The name of the image has stayed the same, but we've now added the `V2` to add some semantic versioning. Tags are part of how `bootc` keeps track of images, which is important when it comes to updates. Since this is a new tag, we would need to `switch` to it in order to use it, just like we did the first time. This might be fine, especially since we've turned off auto-updates. If this should be an update, then we can add a tag to this new image that matches what `bootc` is currently tracking. Remember from the OS base image discussion that an image can have multiple tags associated with it, and `bootc` can track an single tag for an image.
-
-Since we haven't been adding tags to any of our builds, they all have the default latest tag automatically applied.
-[source,bash,role="execute",subs=attributes+]
-----
-podman images {registry_hostname}/caddy-wp
-----
-You can see both of our caddy images, and the tags associated with them. To make `V2` appear as an available update, add the `latest` tag to that image. The first image is the one to operate on, and the second is the complete target name you want to apply. This can be used in a lot of ways, for example to build all images locally without any registry, organization, and tag info and add that only to specific builds that are ready to be pushed to a registry.
-
-[source,bash,role="execute",subs=attributes+]
-----
-podman image tag {registry_hostname}/caddy-wp:V2 {registry_hostname}/caddy-wp:latest
-----
-
-This changed the tag locally, so we need to push the newly tagged image to the registry to pick upt the change there. You'll notice all of the layers are skipped since this is really just a metadata change.
-[source,bash,role="execute",subs=attributes+]
-----
-podman push {registry_hostname}/caddy-wp:latest
-----
-
-Logging back into the VM, you should see an update available for the `caddy-wp` image with the one layer that has our change.
-[source,bash,role="execute",subs=attributes+]
-----
-ssh {vm_user}@qcow-vm
-----
-
-[source,bash,role="execute",subs=attributes+]
-----
-sudo bootc update
-----
-Feel free to apply the update and test the changes.
-
-
-Before proceeding to the next exercise, make sure you have logged out of the virtual machine:
-
-[source,bash,role="execute",subs=attributes+]
-----
-logout
-----
-
-Easy updates, rollbacks, and image switching are part of the core improvements to the operation of 
-image mode systems. Layering is an important part of the design of standard builds and can have some 
-downstream effects as well. Just like stacking configuration management, thinking through the idea of 
-layered builds can be powerful.
+You could routinely check the catalog for updates on some set schedule that works for your operational needs. This could be tedious across a large number of standard builds and could be automated. You could also take advantage of a new set of tools, not usually available for standard operating environment build and design. As image mode uses standard container methods, you can use other standard container tools like those that drive current gitops pipelines. This opens the door to entirely different ways of automating the building, deploying, and maintaining of your standard operating environments and the application images that use them. If you'd like to read more about a gitops flow, we have a blog that https://www.redhat.com/en/blog/jumpstart-gitops-image-mode[walks through a simple set up on GitHub] with an accompanying template.
