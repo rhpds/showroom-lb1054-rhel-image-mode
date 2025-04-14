@@ -26,7 +26,7 @@ To add a user during the deployment to a disk image, the credentials are put int
 An ssh key pair was generated for use during this lab, you can view the public part like this for later use.
 [source,bash,role="execute",subs=attributes+]
 ----
-cat ~/.ssh/*.pub
+cat ~/.ssh/{guid}.pub
 ----
 ....
 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAuXnpoluye+KM+9tvIAdHf+F0IHh+K73tlcjEG8LJRB lab-user@hypervisor
