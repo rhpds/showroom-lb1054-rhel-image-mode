@@ -74,7 +74,7 @@ We're also going to use a new tag for this image, like we did in the previous `b
 
 [source,bash,role="execute",subs=attributes+]
 ----
-podman build --secret id=SSHPUBKEY,src=.ssh/{guid}.pub --file Containerfile --tag {registry_hostname}/httpd:auth
+podman build --secret id=SSHPUBKEY,src=.ssh/{guid}key.pub --file Containerfile --tag {registry_hostname}/httpd:auth
 ----
 
 And make sure to push it to the registry:

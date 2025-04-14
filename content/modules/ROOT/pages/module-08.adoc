@@ -28,7 +28,7 @@ The kickstart file is added to the ISO via a customization block of the `bootc-i
 
 [source,bash,role="execute",subs=attributes+]
 ----
-cat ~/.ssh/*.pub
+cat ~/.ssh/{guid}key.pub
 ----
 ....
 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAuXnpoluye+KM+9tvIAdHf+F0IHh+K73tlcjEG8LJRB lab-user@hypervisor
