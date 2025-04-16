@@ -231,6 +231,8 @@ We can check this by having `bootc` look for an update. Notice the new `V2` imag
 ssh core@qcow-vm sudo bootc update
 ----
 ....
+No changes in node.545jj.gcp.redhatworkshops.io/caddy-wp => sha256:c15b09203ea36a342135cc2d1c061ea96c0b61f4e5c46fd38bc8afe3f6c787a0
+No update available.
 ....
 Remember from the OS base image discussion that an image can have multiple tags associated with it, and `bootc` can track an single tag for an image. To make this new image appear as be an update, then we can add a tag to this new image that matches what `bootc` is currently tracking. 
 

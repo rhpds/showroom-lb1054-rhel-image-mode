@@ -117,17 +117,17 @@ We can change to our new image with the embedded `root` credentials
 sudo bootc switch {registry_hostname}/httpd:auth
 ----
 ----
-layers already present: 68; layers needed: 7 (126.7 MB)
- 452 B [████████████████████] (0s) Fetched layer sha256:2691e6642975            
-Pruned images: 0 (layers: 0, objsize: 58.9 MB)
-Queued for next boot: summit.registry/lb1506:bootc-auth
-  Version: 9.20240721.0
-  Digest: sha256:2afd495b9dd3e72aa4926deb1e738af54e0b1bb935803bc6c107bdd919347167
+layers already present: 69; layers needed: 5 (7.2 kB)
+Fetched layers: 7.06 KiB in 16 seconds (462 B/s)                                               
+  Deploying: done (4 seconds)                                                                  
+Queued for next boot: node.545jj.gcp.redhatworkshops.io/httpd:auth
+  Version: 9.20250415.0
+  Digest: sha256:45352aa6baee739183feeed562fd1cd06e40c40a224ba6d6eee9e1cb78214b2d
 ----
 
 As usual, after the command is done you need to reboot the virtual machine
 for the changes to take effect. Before doing that, please make sure you are logged in to the
-virtual machine and not the hypervisor (the prompt should look like `[{vm_user}@qcow-vm ~]$`):
+virtual machine and not the hypervisor (the prompt should look like `[{vm_user}@localhost ~]$`):
 
 [source,bash,role="execute",subs=attributes+]
 ----
@@ -152,20 +152,14 @@ bootc status
 ----
 ....
 No staged image present
-Current booted image: node.xzk5f.gcp.redhatworkshops.io/httpd:auth
-    Image version: 9.20250326.0 (2025-04-11 20:31:25.725862994 UTC)
-    Image digest: sha256:808357b866a23b1cfac3d9f22034745807d30b9695eaed5fb5a7598e4eb8f11f
-No rollback image present
+Current booted image: node.545jj.gcp.redhatworkshops.io/httpd:auth
+    Image version: 9.20250415.0 (2025-04-16 21:14:37.616335138 UTC)
+    Image digest: sha256:45352aa6baee739183feeed562fd1cd06e40c40a224ba6d6eee9e1cb78214b2d
+Current rollback image: node.545jj.gcp.redhatworkshops.io/caddy-wp
+    Image version: 9.20250415.0 (2025-04-16 20:42:46.356417348 UTC)
+    Image digest: sha256:c15b09203ea36a342135cc2d1c061ea96c0b61f4e5c46fd38bc8afe3f6c787a0
 ....
 
 Feel free to explore the virtual machine before moving on to the next section, remembering you are now `root`.
-
-Since we've masked the `httpd` service in a previous image, what do you think the current status is? Our container file includes a `systemctl enable`, but masking creates a symlink in `/etc` on the host.
-
-If you said "masked", you'd be right
-[source,bash,role="execute",subs=attributes+]
-----
-systemctl status httpd
-----
 
 You've completed the final exercise in the lab. You should have a good baseline for how image mode operates and how it might be of use in your environment. You can find more information about image mode in the Links section at the top of the page. Feel free to log out of the virtual machine and revisit any modules as well.
