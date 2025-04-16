@@ -17,13 +17,20 @@ For this example, we're going to add an SSH key to `root` in the image, somethin
 [#secrets]
 == Using podman secrets at build time
 
-So far, we've been copying ssh keys directly into files with editors, which is fine for exercists or small numbers of users. We will use an additional feature of `podman` to inject the credentials into the Containerfile using a more modern method like an external password vault. 
+So far, we've been copying ssh keys directly into files with editors, which is fine for exercises or a very small numbers of users. We will use an additional feature of `podman` to inject the credentials into the Containerfile using a more modern method like an external password vault. 
 
-First, we'll set up a drop-in file that will configure SSHd to look for user authorized keys in a path controlled by the image. This gives us a way to update credentials later. The drop-in uses the `%u` username match in the search path, so a key that matches the username in `/usr/ssh` would act just like the typical `authorized_keys` file in their home directory.
+First, we'll set up a drop-in file that will configure SSHd to look for user authorized keys in a path controlled by the image. This gives us a way to update credentials later. The drop-in uses the `%u` username match in the search path, so a key that matches the username in `/usr/ssh` would act just like the typical `authorized_keys` file in their home directory. Like the `sudoers` drop-in, the `sshd_config.d` directory is where SSHd looks in it's config path for additional config files. 
 
+Create the expected directories we want to see in `/etc` on the host first. Since we're adding things to `/etc` that we want to control via the host, we need to be careful to avoid local changes to these drop-ins.
 [source,bash,role="execute",subs=attributes+]
 ----
-nano templates/30-auth-system.conf
+mkdir -p etc/ssh/sshd_config.d
+----
+
+Then add the additional configuration directive for SSHd to read.
+[source,bash,role="execute",subs=attributes+]
+----
+nano etc/ssh/sshd_config.d/330-auth-system.conf
 ----
 [source,text,role="execute",subs=attributes+]
 ----
@@ -41,14 +48,13 @@ You can now edit the `Containerfile` to match the following.
 ----
 FROM registry.redhat.io/rhel9/rhel-bootc:9.5
 
-COPY templates/30-auth-system.conf /etc/ssh/sshd_config.d/30-auth-system.conf # <1>
+RUN dnf install -y httpd
+
+ADD etc/ /etc # <1>
+
 RUN mkdir -p /usr/ssh # <2>
 RUN --mount=type=secret,id=SSHPUBKEY cat /run/secrets/SSHPUBKEY > /usr/ssh/root.keys \ # <3>
  && chmod 0600 /usr/ssh/root.keys # <4>
-
-RUN dnf install -y httpd
-
-ADD etc/ /etc
 
 RUN <<EOF
     set -euo pipefail
@@ -60,9 +66,9 @@ RUN echo "Hello Red Hat Summit 2025!!" > /usr/share/www/html/index.html
 
 RUN systemctl enable httpd.service
 ----
-<1> `COPY templates...` -> adds a drop in for sshd to look for public keys in users global `.keys` file, note this is in `/usr` and tied to the image
-<2> `RUN mkdir -p /usr/ssh` -> create the new keys directory in `/usr`
-<3> `RUN --mount=type=secret,id=SSHPUBKEY.. ` -> mounts the file located at the `id`,  only available during this build
+<1> `ADD etc/ /etc` -> automatically picks up the drop-in for sshd since we added it to our local `etc` source
+<2> `RUN mkdir -p /usr/ssh` -> create the new keys directory in `/usr` so it will be controlled in the image
+<3> `RUN --mount=type=secret,id=SSHPUBKEY...` -> mounts the file located at the `id`,  only available during this build
 <4> Fixes the permissions on the SSH key
 
 
