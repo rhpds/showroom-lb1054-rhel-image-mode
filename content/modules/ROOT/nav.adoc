@@ -38,7 +38,7 @@
 ** xref:module-07.adoc#switch-run[Switch the image and run]
 ** xref:module-07.adoc##layers[Troubleshooting changes]
 
-* xref:module-08.adoc[8. Deploying a bootc virtual machine with Anaconda]
+* xref:module-08.adoc[8. Building an unattended install disk ISO]
 ** xref:module-08.adoc#build[Building the installer iso]
 ** xref:module-08.adoc#run[Starting the installation]
 ** xref:module-08.adoc#test[Testing]
