@@ -189,7 +189,7 @@ RUN dnf install -y httpd
 
 ADD etc/ /etc
 
-RUN <<EOF #<1>
+RUN <<EOF 
     set -euo pipefail
     mv /var/www /usr/share/www
     sed -i 's-/var/www-/usr/share/www-' /etc/httpd/conf/httpd.conf
@@ -228,7 +228,7 @@ RUN dnf install -y httpd
 
 ADD etc/ /etc
 
-RUN <<EOF #<1>
+RUN <<EOF 
     set -euo pipefail
     mv /var/www /usr/share/www
     sed -i 's-/var/www-/usr/share/www-' /etc/httpd/conf/httpd.conf
@@ -275,6 +275,16 @@ To deploy our new RHEL 10 based image for testing, we'll use a new command `boot
 sudo bootc switch {registry_hostname}/httpd:10.0
 ----
 ....
+layers already present: 1; layers needed: 68 (721.0 MB)
+Fetching layers ████████████████████ 68/68 
+ └ Fetching ████████████████████ 441 B/441 B (0 B/s) layer 3da3986d7339742f99b81
+Fetched layers: 687.60 MiB in 40 seconds (17.11 MiB/s)                                         
+⠒ Deploying                                                                     
+  Deploying: done (4 seconds)                                                                  
+  Pruned images: 0 (layers: 0, objsize: 39.1 kB)
+Queued for next boot: node.545jj.gcp.redhatworkshops.io/httpd:10.0
+  Version: 10.20250116.0
+  Digest: sha256:19db07016bae2c6693337888474d54aa945599d1f9b991cb9d794e6daf1558e7
 ....
 
 And then reboot to activate the new deployment.
@@ -292,9 +302,37 @@ And check out the version of RHEL running;
 cat /etc/os-release
 ----
 ....
+NAME="Red Hat Enterprise Linux"
+VERSION="10.20250116.0.0 (Coughlan)"
+ID="rhel"
+ID_LIKE="centos fedora"
+VERSION_ID="10.0"
+PLATFORM_ID="platform:el10"
+PRETTY_NAME="Red Hat Enterprise Linux 10.20250116.0.0 Beta (Coughlan)"
+ANSI_COLOR="0;31"
+LOGO="fedora-logo-icon"
+CPE_NAME="cpe:/o:redhat:enterprise_linux:10::baseos"
+HOME_URL="https://www.redhat.com/"
+VENDOR_NAME="Red Hat"
+VENDOR_URL="https://www.redhat.com/"
+DOCUMENTATION_URL="https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/10"
+BUG_REPORT_URL="https://issues.redhat.com/"
+REDHAT_BUGZILLA_PRODUCT="Red Hat Enterprise Linux 10"
+REDHAT_BUGZILLA_PRODUCT_VERSION=10.0
+REDHAT_SUPPORT_PRODUCT="Red Hat Enterprise Linux"
+REDHAT_SUPPORT_PRODUCT_VERSION="10.0"
+OSTREE_VERSION='10.20250116.0'
 ....
 
 We've confirmed it's RHEL 10, now we can start with our acceptance testing. Do our services work like we expect? Is the application throwing any errors? Were any deprecated features, like teamed NICs, being used? And if we run into a major error right at the start, we can simply rollback the host.
+
+Before proceeding, make sure you have logged out of the virtual machine:
+
+[source,bash,role="execute",subs=attributes+]
+----
+logout
+----
+The prompt should look like `[lab-user@bastion ~]$ ` before continuing.
 
 Making use of the tags in the catalog provides you with more options to control and trace your base images. To do the same with the packages you install on top of the base, you can use something like Satellite to control the visibility of new packages at build time. This combination can eliminate any drift between base images and installed packages from repositories.
 
