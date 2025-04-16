@@ -33,7 +33,7 @@ Current rollback image: node.cxdrb.cxdrb.gcp.redhatworkshops.io/httpd <1>
 ....
 <1> the on-disk deployment before our most recent update.
 
-Looking at the status output, we can see the section marked `rollback`now has image information. There are at most 3 images available at any one time: staged for next deployment, the current booted deployment, and a rollback of the last active deployment. If for some reason you needed to go back further, you can deploy directly from the registry instead.
+Looking at the status output, we can see the section marked `rollback` now has image information. There are at most 3 images available at any one time: staged for next deployment, the current booted deployment, and a rollback of the last active deployment. If for some reason you needed to go back further, you can deploy directly from the registry instead.
 
 Rollbacks are as simple as running one command. Let's get this image back to the previous
 state then we can dig into what happened.

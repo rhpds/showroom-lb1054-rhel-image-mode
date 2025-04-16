@@ -23,13 +23,13 @@ as a 'break glass' emergency login for example.
 
 To add a user during the deployment to a disk image, the credentials are put into the config file used by `bootc-image-builder` to create the final disk image.
 
-An ssh key pair was generated for use during this lab, you can view the public part like this for later use.
+An ssh key pair was generated for use during this lab, you can view the public part like this for later use. There's no newline at the end of this file, so the `echo` is just to make copying the output easier.
 [source,bash,role="execute",subs=attributes+]
 ----
-cat ~/.ssh/{guid}key.pub
+cat ~/.ssh/{guid}key.pub; echo
 ----
 ....
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAuXnpoluye+KM+9tvIAdHf+F0IHh+K73tlcjEG8LJRB lab-user@hypervisor
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAuXnpoluye+KM+9tvIAdHf+F0IHh+K73tlcjEG8LJRB
 ....
 NOTE: This is only a sample and this public key will not work in your environment
 
@@ -98,10 +98,10 @@ Once this completes, you will find the image in the `qcow2/` directory:
 
 [source,bash,role="execute",subs=attributes+]
 ----
-ls -lah qcow2/disk.qcow2
+file qcow2/disk.qcow2
 ----
 ....
--rw-r--r--. 1 root root 945M May  2 06:10 qcow2/disk.qcow2
+qcow2/disk.qcow2: QEMU QCOW2 Image (v3), 10737418240 bytes
 ....
 
 [#create-vm]
