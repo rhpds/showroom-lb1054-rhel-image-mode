@@ -28,10 +28,10 @@ The kickstart file is added to the ISO via a customization block of the `bootc-i
 
 [source,bash,role="execute",subs=attributes+]
 ----
-cat ~/.ssh/{guid}key.pub
+cat ~/.ssh/{guid}key.pub; echo
 ----
 ....
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAuXnpoluye+KM+9tvIAdHf+F0IHh+K73tlcjEG8LJRB lab-user@hypervisor
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAuXnpoluye+KM+9tvIAdHf+F0IHh+K73tlcjEG8LJRB
 ....
 NOTE: This is only a sample and this public key will not work in your environment
 
@@ -109,9 +109,14 @@ This will download the image during the install process and use `bootc` to deplo
 [#run]
 == Starting the installation with Anaconda in a virtual machine
 
-Having created a custom installation ISO, we can boot a virtual machine and automatically install our image. We are once again using `virt-install` to create a local VM, the main difference is that here we are using the `--location` option to pass the local path of the ISO file and `--extra-args` to pass the path to the kickstart file to Anaconda. This emulates inserting a physical disk into a bare metal system. We'll let `virsh` attach to the serial console created by `--extra-args` so we can see what happens.
+Having created a custom installation ISO, we can boot a virtual machine and automatically install our image. We are once again using `virt-install` to create a local VM, the main difference is that here we are using the options to pass the local path of the ISO file. We'll attach `virsh` to the console created via the `--extra-args` options so we can see what happens.
 
-To get the volume ID of the ISO to tell anaconda where to find the kickstart file on disk, use the `file` command.
+[NOTE]
+====
+The kernel arguments for the kickstart are embedded automatically into the ISO by `bootc-image-builder`, however in this lab environment there are no appropriate options for viewing the standard console with `virsh`. These `--location` and `--extra-args` are not required for normal use of the unattended ISO installation in most environments. We use them along with the `noreboot` option to ensure visibility to the install process for demonstration purposes.
+====
+
+Locate the installer ISO in the `bootiso` directory. 
 [source,bash,role="execute",subs=attributes+]
 ----
 file bootiso/install.iso

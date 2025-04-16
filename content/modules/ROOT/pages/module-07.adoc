@@ -237,7 +237,7 @@ You can see both of our caddy images, and the tags associated with them. To make
 podman image tag {registry_hostname}/caddy-wp:V2 {registry_hostname}/caddy-wp:latest
 ----
 
-This changed the tag locally, so we need to push the newly tagged image to the registry to pick upt the change there. You'll notice all of the layers are skipped since this is really just a metadata change.
+This changed the tag locally, so we need to push the newly tagged image to the registry to pick up the change there. You'll notice all of the layers are skipped since this is really just a metadata change.
 [source,bash,role="execute",subs=attributes+]
 ----
 podman push {registry_hostname}/caddy-wp:latest
