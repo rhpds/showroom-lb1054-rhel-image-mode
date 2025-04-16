@@ -25,9 +25,10 @@ First, we'll set up a drop-in file that will configure SSHd to look for user aut
 ----
 nano templates/30-auth-system.conf
 ----
-....
+[source,text,role="execute",subs=attributes+]
+----
 AuthorizedKeysFile /usr/ssh/%u.keys .ssh/authorized_keys .ssh/authorized_keys2
-....
+----
 
 The `podman build` command has an option to pass information into a build in a way that it doesn't get stored in the final image. It will read a file or an environment variable, and make the contents available during the build in a file under mounted under `/run/secrets` on the host. The arguments passed to `podman build --secret` will determine if the source of the secret is a file or an environment variable. To pass more than one secret, you add an additional `--secret` argument.
 
@@ -153,12 +154,12 @@ No rollback image present
 
 Feel free to explore the virtual machine before moving on to the next section, remembering you are now `root`.
 
-Since we've moved away from the WordPress image back to a standard httpd service, you can look for the original 
-index file on disk or via `curl`.
+Since we've masked the `httpd` service in a previous image, what do you think the current status is? Our container file includes a `systemctl enable`, but masking creates a symlink in `/etc` on the host.
 
+If you said "masked", you'd be right
 [source,bash,role="execute",subs=attributes+]
 ----
-logout
+systemctl status httpd
 ----
 
-You've completed the final exercise in the lab. You should have a good baseline for how image mode operates and how it might be of use in your environment. You can find more information about image mode in the Links section at the top of the page.
+You've completed the final exercise in the lab. You should have a good baseline for how image mode operates and how it might be of use in your environment. You can find more information about image mode in the Links section at the top of the page. Feel free to log out of the virtual machine and revisit any modules as well.

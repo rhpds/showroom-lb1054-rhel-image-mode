@@ -38,7 +38,7 @@ nano etc/sudoers.d/wheel
 
 Add the following and save the file
 
-[source,bash,role="execute",subs=attributes+]
+[source,text,role="execute",subs=attributes+]
 ----
 # Enable passwordless sudo for the wheel group
 %wheel        ALL=(ALL)       NOPASSWD: ALL
@@ -53,7 +53,7 @@ nano etc/motd
 
 Add the following and save the file
 
-[source,bash,role="execute",subs=attributes+]
+[source,text,role="execute",subs=attributes+]
 ----
 Welcome to the image mode lifestyle!
 ----
@@ -68,11 +68,12 @@ RUN dnf install -y httpd
 
 ADD etc/ /etc # <1>
 
-RUN echo "Hello Red Hat Summit 2025!!" > /var/www/html/index.html
+RUN echo "Hello Red Hat Summit 2025!!" > /var/www/html/index.html # <2>
 
 RUN systemctl enable httpd.service
 ----
 <1> Copies all the local `etc/` contents we just created into `/etc` in the image
+<2> Update the text in the index.html too
 
 If you aren't familiar, the `ADD` directive has some extra capabilities over the `COPY` command. Where `COPY` only works on a single file, `ADD` can work on complete directories or even unpack tar files. This can be very useful when dealing with multiple files and directories that all start from the same place, but could make the Containerfile a little opaque if folks are unfamiliar with the syntax and the results.
 
@@ -181,7 +182,6 @@ What about the change to the index page?
 curl http://localhost
 sudo cat /var/www/html/index.html
 ----
-
 ....
 Hello Red Hat
 ....
