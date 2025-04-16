@@ -77,6 +77,11 @@ If that new build were a new minor release (eg 9.6), the `latest` tag would poin
 == Using specific versions of base images
 Let's build a new image using an older tag that still checks out to get an idea of how this works and how you can use it to control updates.
 
+[source,bash,role="execute",subs=attributes+]
+----
+ nano Containerfile.base
+----
+
 [source,dockerfile,role="execute",subs=attributes+]
 ----
 FROM registry.redhat.io/rhel9/rhel-bootc:9.5-1739946498
@@ -93,7 +98,7 @@ Since we're using a tag that doesn't change in the registry, we know that we wil
 
 [source,bash,role="execute",subs=attributes+]
 ----
-podman build --file Containerfile --tag {registry_hostname}/base-check
+podman build --file Containerfile.base --tag {registry_hostname}/base-check
 ----
 You should notice that this build starts by pulling the base image, since it's different than what we have been using.  Since this is just an older version, you will still see shared layers being skipped.
 
@@ -139,6 +144,10 @@ While not every nuance of system behavior can be tested in a container (eg SELin
 [#tag-update]
 == Updating the base image using tags
 To update the base image, we only need to change the tag to the latest timestamp variant (as of the writing of this exercise) and build the image:
+[source,bash,role="execute",subs=attributes+]
+----
+ nano Containerfile.base
+----
 [source,dockerfile,role="execute",subs=attributes+]
 ----
 FROM registry.redhat.io/rhel9/rhel-bootc:9.5-1742979700
@@ -151,7 +160,7 @@ RUN systemctl enable httpd.service
 
 [source,bash,role="execute",subs=attributes+]
 ----
-podman build --file Containerfile --tag {registry_hostname}/base-check
+podman build --file Containerfile.base --tag {registry_hostname}/base-check
 ----
 You should notice that this build skips *all* of the layers when pulling the base image. While it's a different tag, it's the same image as the one we've used throughout the exercises. Multiple tags can refer to a single image, allow you to convey meaningful information about an image. 
 
