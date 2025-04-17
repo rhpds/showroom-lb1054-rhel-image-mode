@@ -1,9 +1,9 @@
-= Updating bootc systems
+= Making changes to bootc systems
 
-In this lab, you will learn how to add or update software in images and apply them to bootc hosts. 
+In this lab, you will learn how to make configuration or software changes in images and apply them to bootc hosts. 
 
 [#update-container]
-== Updating the bootc image
+== Changing the bootc image
 
 We've created our first system but there are a few things that might be missing we typically 
 do to our systems. Not requiring a password every time we use sudo might be something we allow 
