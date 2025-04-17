@@ -15,8 +15,8 @@
 ** xref:module-03.adoc#create-vm[Create the virtual machine]
 ** xref:module-03.adoc#test[Testing]
 
-* xref:module-04.adoc[4. Updating bootc hosts]
-** xref:module-04.adoc#update-container[Updating the bootc image]
+* xref:module-04.adoc[4. Changing bootc hosts]
+** xref:module-04.adoc#update-container[Altering the bootc image]
 ** xref:module-04.adoc#update-vm[Updating the virtual machine]
 ** xref:module-04.adoc#testing[Testing the changes]
 
