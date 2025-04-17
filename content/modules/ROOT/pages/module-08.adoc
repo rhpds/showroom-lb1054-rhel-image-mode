@@ -307,3 +307,12 @@ Current rollback image: oci:/run/install/repo/container
 In the status you can see `bootc` is now tracking local container storage for updates, not the filesystem path. Further updates just need to be copied there for `bootc` to recognize and apply. You could use `skopeo` sync a registry repository to media, like a USB drive, as well as copy it from the media to the local storage on the host. 
 
 This opens a range of possibilities to deliver installations and updates for edge devices, disconnected networks, and any other arenas where direct connectivity to a registry over a network isn't possible or desired. 
+
+Before proceeding, make sure you have logged out of the virtual machine:
+
+[source,bash,role="execute",subs=attributes+]
+----
+logout
+----
+
+The prompt should look like `[lab-user@bastion ~]$ ` before continuing.

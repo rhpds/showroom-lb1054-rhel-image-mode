@@ -17,17 +17,25 @@ For this example, we're going to add an SSH key to `root` in the image, somethin
 [#secrets]
 == Using podman secrets at build time
 
-So far, we've been copying ssh keys directly into files with editors, which is fine for exercists or small numbers of users. We will use an additional feature of `podman` to inject the credentials into the Containerfile using a more modern method like an external password vault. 
+So far, we've been copying ssh keys directly into files with editors, which is fine for exercises or a very small numbers of users. We will use an additional feature of `podman` to inject the credentials into the Containerfile using a more modern method like an external password vault. 
 
-First, we'll set up a drop-in file that will configure SSHd to look for user authorized keys in a path controlled by the image. This gives us a way to update credentials later. The drop-in uses the `%u` username match in the search path, so a key that matches the username in `/usr/ssh` would act just like the typical `authorized_keys` file in their home directory.
+First, we'll set up a drop-in file that will configure SSHd to look for user authorized keys in a path controlled by the image. This gives us a way to update credentials later. The drop-in uses the `%u` username match in the search path, so a key that matches the username in `/usr/ssh` would act just like the typical `authorized_keys` file in their home directory. Like the `sudoers` drop-in, the `sshd_config.d` directory is where SSHd looks in it's config path for additional config files. 
 
+Create the expected directories we want to see in `/etc` on the host first. Since we're adding things to `/etc` that we want to control via the host, we need to be careful to avoid local changes to these drop-ins.
 [source,bash,role="execute",subs=attributes+]
 ----
-nano templates/30-auth-system.conf
+mkdir -p etc/ssh/sshd_config.d
 ----
-....
+
+Then add the additional configuration directive for SSHd to read.
+[source,bash,role="execute",subs=attributes+]
+----
+nano etc/ssh/sshd_config.d/330-auth-system.conf
+----
+[source,text,role="execute",subs=attributes+]
+----
 AuthorizedKeysFile /usr/ssh/%u.keys .ssh/authorized_keys .ssh/authorized_keys2
-....
+----
 
 The `podman build` command has an option to pass information into a build in a way that it doesn't get stored in the final image. It will read a file or an environment variable, and make the contents available during the build in a file under mounted under `/run/secrets` on the host. The arguments passed to `podman build --secret` will determine if the source of the secret is a file or an environment variable. To pass more than one secret, you add an additional `--secret` argument.
 
@@ -40,14 +48,13 @@ You can now edit the `Containerfile` to match the following.
 ----
 FROM registry.redhat.io/rhel9/rhel-bootc:9.5
 
-COPY templates/30-auth-system.conf /etc/ssh/sshd_config.d/30-auth-system.conf # <1>
+RUN dnf install -y httpd
+
+ADD etc/ /etc # <1>
+
 RUN mkdir -p /usr/ssh # <2>
 RUN --mount=type=secret,id=SSHPUBKEY cat /run/secrets/SSHPUBKEY > /usr/ssh/root.keys \ # <3>
  && chmod 0600 /usr/ssh/root.keys # <4>
-
-RUN dnf install -y httpd
-
-ADD etc/ /etc
 
 RUN <<EOF
     set -euo pipefail
@@ -59,9 +66,9 @@ RUN echo "Hello Red Hat Summit 2025!!" > /usr/share/www/html/index.html
 
 RUN systemctl enable httpd.service
 ----
-<1> `COPY templates...` -> adds a drop in for sshd to look for public keys in users global `.keys` file, note this is in `/usr` and tied to the image
-<2> `RUN mkdir -p /usr/ssh` -> create the new keys directory in `/usr`
-<3> `RUN --mount=type=secret,id=SSHPUBKEY.. ` -> mounts the file located at the `id`,  only available during this build
+<1> `ADD etc/ /etc` -> automatically picks up the drop-in for sshd since we added it to our local `etc` source
+<2> `RUN mkdir -p /usr/ssh` -> create the new keys directory in `/usr` so it will be controlled in the image
+<3> `RUN --mount=type=secret,id=SSHPUBKEY...` -> mounts the file located at the `id`,  only available during this build
 <4> Fixes the permissions on the SSH key
 
 
@@ -110,17 +117,17 @@ We can change to our new image with the embedded `root` credentials
 sudo bootc switch {registry_hostname}/httpd:auth
 ----
 ----
-layers already present: 68; layers needed: 7 (126.7 MB)
- 452 B [████████████████████] (0s) Fetched layer sha256:2691e6642975            
-Pruned images: 0 (layers: 0, objsize: 58.9 MB)
-Queued for next boot: summit.registry/lb1506:bootc-auth
-  Version: 9.20240721.0
-  Digest: sha256:2afd495b9dd3e72aa4926deb1e738af54e0b1bb935803bc6c107bdd919347167
+layers already present: 69; layers needed: 5 (7.2 kB)
+Fetched layers: 7.06 KiB in 16 seconds (462 B/s)                                               
+  Deploying: done (4 seconds)                                                                  
+Queued for next boot: node.545jj.gcp.redhatworkshops.io/httpd:auth
+  Version: 9.20250415.0
+  Digest: sha256:45352aa6baee739183feeed562fd1cd06e40c40a224ba6d6eee9e1cb78214b2d
 ----
 
 As usual, after the command is done you need to reboot the virtual machine
 for the changes to take effect. Before doing that, please make sure you are logged in to the
-virtual machine and not the hypervisor (the prompt should look like `[{vm_user}@qcow-vm ~]$`):
+virtual machine and not the hypervisor (the prompt should look like `[{vm_user}@localhost ~]$`):
 
 [source,bash,role="execute",subs=attributes+]
 ----
@@ -145,20 +152,14 @@ bootc status
 ----
 ....
 No staged image present
-Current booted image: node.xzk5f.gcp.redhatworkshops.io/httpd:auth
-    Image version: 9.20250326.0 (2025-04-11 20:31:25.725862994 UTC)
-    Image digest: sha256:808357b866a23b1cfac3d9f22034745807d30b9695eaed5fb5a7598e4eb8f11f
-No rollback image present
+Current booted image: node.545jj.gcp.redhatworkshops.io/httpd:auth
+    Image version: 9.20250415.0 (2025-04-16 21:14:37.616335138 UTC)
+    Image digest: sha256:45352aa6baee739183feeed562fd1cd06e40c40a224ba6d6eee9e1cb78214b2d
+Current rollback image: node.545jj.gcp.redhatworkshops.io/caddy-wp
+    Image version: 9.20250415.0 (2025-04-16 20:42:46.356417348 UTC)
+    Image digest: sha256:c15b09203ea36a342135cc2d1c061ea96c0b61f4e5c46fd38bc8afe3f6c787a0
 ....
 
 Feel free to explore the virtual machine before moving on to the next section, remembering you are now `root`.
 
-Since we've moved away from the WordPress image back to a standard httpd service, you can look for the original 
-index file on disk or via `curl`.
-
-[source,bash,role="execute",subs=attributes+]
-----
-logout
-----
-
-You've completed the final exercise in the lab. You should have a good baseline for how image mode operates and how it might be of use in your environment. You can find more information about image mode in the Links section at the top of the page.
+You've completed the final exercise in the lab. You should have a good baseline for how image mode operates and how it might be of use in your environment. You can find more information about image mode in the Links section at the top of the page. Feel free to log out of the virtual machine and revisit any modules as well.
