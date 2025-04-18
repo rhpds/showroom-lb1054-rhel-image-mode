@@ -107,7 +107,7 @@ RUN dnf install -y httpd
 ADD etc/ /etc
 
 RUN <<EOF #<1>
-    set -euo pipefail
+    set -euxo pipefail
     mv /var/www /usr/share/www
     sed -i 's-/var/www-/usr/share/www-' /etc/httpd/conf/httpd.conf
 EOF
@@ -126,7 +126,7 @@ we need to move it to somewhere under `bootc` control. We move
 the default package contents to a new location in `/usr` then update the Apache 
 configuration to serve pages from this new directory. 
 
-Since the heredoc support for containerfiles essentially reads it as a mini-bash script, using `set -euo pipefail` will cause any errors in these commands to bubble up and stop the build. This way we don't need to wait to catch an error on the host to start troubleshooting.
+Since the heredoc support for containerfiles essentially reads it as a mini-bash script, using `set -euxo pipefail` will show what's run and cause any errors in these commands to bubble up and stop the build. This way we don't need to wait to catch an error on the host to start troubleshooting.
 
 We've also changed the echo line to create the index.html in the new docroot location.
 
