@@ -204,7 +204,7 @@ ADD wordpress-quadlet/etc/ /etc
 ADD wordpress-quadlet/usr/ /usr
 
 RUN <<EOF
-     set -euo pipefail
+     set -euxo pipefail
      systemctl mask httpd.service 
      systemctl mask bootc-fetch-apply-updates.timer 
 EOF
