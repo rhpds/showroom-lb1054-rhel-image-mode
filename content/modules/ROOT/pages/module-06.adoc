@@ -4,7 +4,7 @@ We looked at how to add new software packages to a bootc host, but what about ap
 
 Red Hat publishes updated base images to the Container Catalog regularly, to understand how to make the best use of them, we need to revisit tagging.
 
-* Insert a screenshot of the dropdown in the catalog
+image::catalog_tags_small.png[]
 
 [#naming]
 == What's in a name?
