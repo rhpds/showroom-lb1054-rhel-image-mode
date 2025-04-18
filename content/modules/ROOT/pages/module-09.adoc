@@ -57,7 +57,7 @@ RUN --mount=type=secret,id=SSHPUBKEY cat /run/secrets/SSHPUBKEY > /usr/ssh/root.
  && chmod 0600 /usr/ssh/root.keys # <4>
 
 RUN <<EOF
-    set -euo pipefail
+    set -euxo pipefail
     mv /var/www /usr/share/www
     sed -i 's-/var/www-/usr/share/www-' /etc/httpd/conf/httpd.conf
 EOF
