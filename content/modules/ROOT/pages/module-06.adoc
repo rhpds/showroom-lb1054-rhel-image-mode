@@ -68,10 +68,13 @@ date -d@1742979700
 Wed Mar 26 05:01:40 AM EDT 2025
 ....
 ====
-
 At the time of writing, `latest` would point to `9.5`, the most current minor release of RHEL 9. Both of these also point to `9.5-1742979700`, as seen in the screenshot above. This also means that should a new timestamped build be published to the catalog, the `9.5` tag would automatically update to that next new build. 
 
-If that new build were a new minor release (eg 9.6), the `latest` tag would point to that minor. Knowing what tags point to what images, and therefor what software is available in your base image is important. 
+If that new build were a new minor release (eg 9.6), the `latest` tag would point to that minor. 
+
+The updates to base images https://access.redhat.com/support/policy/updates/errata#RHEL9_Planning_Guide[follow the RHEL lifecycle^]. Minor releases will receive active updates for 6 months. If you do need to remain on a minor version longer, EUS is available with the standard policies. If required, it would be easiest to begin with an EUS image, rather than change the base image references 6 months later. 
+
+Knowing what tags point to what images, and therefor what software is available in your base image is important. 
 
 [#tag-build]
 == Using specific versions of base images
