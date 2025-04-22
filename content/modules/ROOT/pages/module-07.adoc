@@ -274,7 +274,14 @@ Before proceeding to the next exercise, make sure you have logged out of the vir
 logout
 ----
 
+== Core principles
 Easy updates, rollbacks, and image switching are part of the core improvements to the operation of 
 image mode systems. Layering is an important part of the design of standard builds and can have some 
 downstream effects as well. Just like stacking configuration management, thinking through the idea of 
 layered builds can be powerful.
+
+In this lab we've covered the very basics of image mode to get you started in your exploration of what this can do for you and your environment. There's a lot we haven't covered, like compliance, managing kernel arguments, integrating with other tools like Ansible or Satellite, and much more. Image mode is just leaving tech preview, so there's a full roadmap of improvements to come.
+
+We've got other ways to learn more, including https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/introducing-image-mode-for-rhel_using-image-mode-for-rhel-to-build-deploy-and-manage-operating-systems[documentation^], https://github.com/redhat-cop/rhel-bootc-examples[example snippets^], https://github.com/redhat-cop/redhat-image-mode-demo[other exercises^], and more.
+
+In the next modules, we'll add a little more color to ways image mode can be used.
