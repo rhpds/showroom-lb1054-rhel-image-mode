@@ -1,8 +1,4 @@
 * xref:module-01.adoc[1. System setup]
-** xref:module-01.adoc#repo[Repository]
-** xref:module-01.adoc#login[Login to registry]
-** xref:module-01.adoc#high-level[High level setup]
-** xref:module-01.adoc#status[Setup check]
 
 * xref:module-02.adoc[2. Building the first bootc container]
 ** xref:module-02.adoc#write[(re)Write the Containerfile]
