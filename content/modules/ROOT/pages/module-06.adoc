@@ -206,11 +206,11 @@ RUN dnf install -y httpd
 
 ADD etc/ /etc
 
-RUN <<EOF 
+RUN <<EORUN
     set -euo pipefail
     mv /var/www /usr/share/www
     sed -i 's-/var/www-/usr/share/www-' /etc/httpd/conf/httpd.conf
-EOF
+EORUN
 
 RUN echo "Hello Red Hat Summit 2025!!" > /usr/share/www/html/index.html
 
@@ -245,11 +245,11 @@ RUN dnf install -y httpd
 
 ADD etc/ /etc
 
-RUN <<EOF 
+RUN <<EORUN
     set -euo pipefail
     mv /var/www /usr/share/www
     sed -i 's-/var/www-/usr/share/www-' /etc/httpd/conf/httpd.conf
-EOF
+EORUN
 
 RUN echo "Hello Red Hat Summit 2025!!" > /usr/share/www/html/index.html
 
