@@ -153,7 +153,7 @@ To update the base image, we only need to change the tag to the latest timestamp
 ----
 [source,dockerfile,role="execute",subs=attributes+]
 ----
-FROM registry.redhat.io/rhel9/rhel-bootc:9.5-1746634042
+FROM registry.redhat.io/rhel9/rhel-bootc:9.5-1747115631
 
 RUN dnf install -y httpd
 RUN echo "Hello Red Hat" > /var/www/html/index.html
@@ -175,16 +175,15 @@ Now let's check the package versions in this base image using the same commands 
 podman run --rm -i {registry_hostname}/base-check rpm -qa httpd kernel*
 ----
 ....
-kernel-modules-core-5.14.0-503.33.1.el9_5.x86_64
-kernel-core-5.14.0-503.33.1.el9_5.x86_64
-kernel-modules-5.14.0-503.33.1.el9_5.x86_64
-kernel-5.14.0-503.33.1.el9_5.x86_64
-httpd-2.4.62-1.el9_5.2.x86_64
+kernel-modules-core-5.14.0-503.40.1.el9_5.x86_64
+kernel-core-5.14.0-503.40.1.el9_5.x86_64
+kernel-modules-5.14.0-503.40.1.el9_5.x86_64
+kernel-5.14.0-503.40.1.el9_5.x86_64
+httpd-2.4.62-4.el9.x86_64
 ....
 
 There's a newer kernel provided by the updated base image, but the version of httpd installed is the same. We're using repositories directly from the Red Hat services, any packages we add during the container build will be whatever is most recently published. You can also update to a newer minor version by simply changing the tag to match.
 
-// ANCHOR NEW BRANCH HERE
 [#version-updates]
 == Moving to newer versions of RHEL
 
@@ -192,7 +191,7 @@ Applying updates within a single minor version is the image mode analogue to sta
 
 Normally, a new minor or major version of RHEL requires a number of changes along the line to integrate into automation, deliver to developers to test and certify the app, then on to the production deployment workflow. There's usually a need for parallel systems as well, contributing to sprawl and management burden. Everything you've looked at so far with image mode opens a new path: replace the base image in a Containerfile, publish a new image, apply to an existing host, and rollback after testing.  Let's do that now.
 
-Take the most recent containerfile that has our Apache example and update it to RHEL 9.6.
+Take the containerfile that has our Apache example and update it to RHEL 9.6.
 [source,bash,role="execute",subs=attributes+]
 ----
  nano Containerfile
