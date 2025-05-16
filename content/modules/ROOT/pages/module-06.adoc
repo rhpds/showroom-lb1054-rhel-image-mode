@@ -153,7 +153,7 @@ To update the base image, we only need to change the tag to the latest timestamp
 ----
 [source,dockerfile,role="execute",subs=attributes+]
 ----
-FROM registry.redhat.io/rhel9/rhel-bootc:9.5-1742979700
+FROM registry.redhat.io/rhel9/rhel-bootc:9.5-1747115631
 
 RUN dnf install -y httpd
 RUN echo "Hello Red Hat" > /var/www/html/index.html
@@ -175,16 +175,187 @@ Now let's check the package versions in this base image using the same commands 
 podman run --rm -i {registry_hostname}/base-check rpm -qa httpd kernel*
 ----
 ....
-kernel-modules-core-5.14.0-503.33.1.el9_5.x86_64
-kernel-core-5.14.0-503.33.1.el9_5.x86_64
-kernel-modules-5.14.0-503.33.1.el9_5.x86_64
-kernel-5.14.0-503.33.1.el9_5.x86_64
-httpd-2.4.62-1.el9_5.2.x86_64
+kernel-modules-core-5.14.0-503.40.1.el9_5.x86_64
+kernel-core-5.14.0-503.40.1.el9_5.x86_64
+kernel-modules-5.14.0-503.40.1.el9_5.x86_64
+kernel-5.14.0-503.40.1.el9_5.x86_64
+httpd-2.4.62-4.el9.x86_64
 ....
 
 There's a newer kernel provided by the updated base image, but the version of httpd installed is the same. We're using repositories directly from the Red Hat services, any packages we add during the container build will be whatever is most recently published. You can also update to a newer minor version by simply changing the tag to match.
 
-// ANCHOR NEW BRANCH HERE
+[#version-updates]
+== Moving to newer versions of RHEL
+
+Applying updates within a single minor version is the image mode analogue to standard patching for package mode hosts. We publish new versions of the base that includes new packages we're shipping at the moment.  The naming discussion also talked about what happens with new minor release. Being able to move not only between updates to a base image but to new minor or even major versions makes adopting and certifying new images much easier.
+
+Normally, a new minor or major version of RHEL requires a number of changes along the line to integrate into automation, deliver to developers to test and certify the app, then on to the production deployment workflow. There's usually a need for parallel systems as well, contributing to sprawl and management burden. Everything you've looked at so far with image mode opens a new path: replace the base image in a Containerfile, publish a new image, apply to an existing host, and rollback after testing.  Let's do that now.
+
+Take the containerfile that has our Apache example and update it to RHEL 9.6.
+[source,bash,role="execute",subs=attributes+]
+----
+ nano Containerfile
+----
+
+[source,dockerfile,role="execute",subs=attributes+]
+----
+FROM registry.redhat.io/rhel9/rhel-bootc:9.6
+
+RUN dnf install -y httpd
+
+ADD etc/ /etc
+
+RUN <<EORUN
+    set -euo pipefail
+    mv /var/www /usr/share/www
+    sed -i 's-/var/www-/usr/share/www-' /etc/httpd/conf/httpd.conf
+EORUN
+
+RUN echo "Hello Red Hat Summit 2025!!" > /usr/share/www/html/index.html
+
+RUN systemctl enable httpd.service
+----
+
+And that's really it. By changing the base image the FROM line uses, we now will build using the latest minor release. Publishing this for use, we want to use a new tag that let's everyone know this image has a different version of RHEL inside. 
+
+[source,bash,role="execute",subs=attributes+]
+----
+podman build --file Containerfile --tag {registry_hostname}/httpd:9.6
+----
+
+[source,bash,role="execute",subs=attributes+]
+----
+podman push {registry_hostname}/httpd:9.6
+----
+
+Our newly updated image is available for any image mode host now. That's all it takes to start adopting a new minor RHEL release. From here, we could pick a virtual machine and use the `bootc switch` command to start testing changes, but the technological changes between 9.5 and 9.6 are fairly small. That's part of the lifecycle of RHEL. What about something that has a bigger jump?
+
+[#major-upgrade]
+== Testing a new major release
+
+Looking again at the naming convention discussion, you may notice that we use the `namespace` and `repository` part of the specification when *publishing* images. We don't have users or organizations within the catalog for Red Hat, those are used for partner images. But we can make use of them to separate different major versions of RHEL. You may already be familiar with this from UBI, which has been publishing this way for a while: `ubi8/ubi` vs `ubi9/ubi`. The common `repository` name across `namespaces` makes it a little easier to understand what's moving.
+
+Edit the Containerfile again, but replace both the tag and the namespace.
+[source,dockerfile,role="execute",subs=attributes+]
+----
+FROM registry.redhat.io/rhel10/rhel-bootc:10.0
+
+RUN dnf install -y httpd
+
+ADD etc/ /etc
+
+RUN <<EORUN
+    set -euo pipefail
+    mv /var/www /usr/share/www
+    sed -i 's-/var/www-/usr/share/www-' /etc/httpd/conf/httpd.conf
+EORUN
+
+RUN echo "Hello Red Hat Summit 2025!!" > /usr/share/www/html/index.html
+
+RUN systemctl enable httpd.service
+----
+
+We now have an image using RHEL 10, with no other modifications to the rest of the containerfile. Build and push means we have published 3 images that differ only on RHEL version: the most recent 9.5, the recently released 9.6, and the brand new 10.0.
+[source,bash,role="execute",subs=attributes+]
+----
+podman build --file Containerfile --tag {registry_hostname}/httpd:10.0
+----
+
+[source,bash,role="execute",subs=attributes+]
+----
+podman push {registry_hostname}/httpd:10.0
+----
+
+With something like testing a new major release, having the ability to test locally and in-place on a development host this quickly is key to faster adoption. Now, this isn't a replacement for in-place upgrades, we are providing a new image. In an environment with more downstream images and live data, this example is only the starting point. We could start local testing, like at the start of this exercise, but having a built-in rollback means we can pick any host and start live tests. 
+
+The virtual machine you have created in the previous exercise should still be running. You can check this with:
+
+[source,bash,role="execute",subs=attributes+]
+----
+virsh --connect qemu:///system list
+----
+
+And the output should list the virtual machine called `qcow-vm` as `running`.
+
+Now you can ssh into the virtual machine:
+
+[source,bash,role="execute",subs=attributes+]
+----
+ssh {vm_user}@qcow-vm
+----
+
+To deploy our new RHEL 10 based image for testing, we'll use a new command `bootc switch` that tells `bootc` to track the new tag. We'll talk more about what `bootc switch` does and how we can use it in the next exercise.
+
+[source,bash,role="execute",subs=attributes+]
+----
+sudo bootc switch {registry_hostname}/httpd:10.0
+----
+....
+layers already present: 1; layers needed: 68 (721.0 MB)
+Fetching layers ████████████████████ 68/68 
+ └ Fetching ████████████████████ 441 B/441 B (0 B/s) layer 3da3986d7339742f99b81
+Fetched layers: 687.60 MiB in 40 seconds (17.11 MiB/s)                                         
+⠒ Deploying                                                                     
+  Deploying: done (4 seconds)                                                                  
+  Pruned images: 0 (layers: 0, objsize: 39.1 kB)
+Queued for next boot: node.545jj.gcp.redhatworkshops.io/httpd:10.0
+  Version: 10.20250116.0
+  Digest: sha256:19db07016bae2c6693337888474d54aa945599d1f9b991cb9d794e6daf1558e7
+....
+
+And then reboot to activate the new deployment.
+
+After a moment you can log back into the virtual machine:
+
+[source,bash,role="execute",subs=attributes+]
+----
+ssh {vm_user}@qcow-vm
+----
+
+And check out the version of RHEL running;
+[source,bash,role="execute",subs=attributes+]
+----
+cat /etc/os-release
+----
+....
+NAME="Red Hat Enterprise Linux"
+VERSION="10.20250116.0.0 (Coughlan)"
+ID="rhel"
+ID_LIKE="centos fedora"
+VERSION_ID="10.0"
+PLATFORM_ID="platform:el10"
+PRETTY_NAME="Red Hat Enterprise Linux 10.20250116.0.0 Beta (Coughlan)"
+ANSI_COLOR="0;31"
+LOGO="fedora-logo-icon"
+CPE_NAME="cpe:/o:redhat:enterprise_linux:10::baseos"
+HOME_URL="https://www.redhat.com/"
+VENDOR_NAME="Red Hat"
+VENDOR_URL="https://www.redhat.com/"
+DOCUMENTATION_URL="https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/10"
+BUG_REPORT_URL="https://issues.redhat.com/"
+REDHAT_BUGZILLA_PRODUCT="Red Hat Enterprise Linux 10"
+REDHAT_BUGZILLA_PRODUCT_VERSION=10.0
+REDHAT_SUPPORT_PRODUCT="Red Hat Enterprise Linux"
+REDHAT_SUPPORT_PRODUCT_VERSION="10.0"
+OSTREE_VERSION='10.20250116.0'
+....
+
+And our httpd service is working
+
+[source,bash,role="execute",subs=attributes+]
+----
+systemctl status httpd.service --no-pager
+----
+
+We've confirmed it's RHEL 10, now we can start with our acceptance testing. Do our services work like we expect? Is the application throwing any errors? Were any deprecated features, like teamed NICs, being used? And if we run into a major error right at the start, we can simply rollback the host.
+
+Before proceeding, make sure you have logged out of the virtual machine:
+
+[source,bash,role="execute",subs=attributes+]
+----
+logout
+----
+The prompt should look like `[lab-user@bastion ~]$ ` before continuing.
 
 Making use of the tags in the catalog provides you with more options to control and trace your base images. To do the same with the packages you install on top of the base, you can use something like Satellite to control the visibility of new packages at build time. This combination can eliminate any drift between base images and installed packages from repositories.
 

@@ -92,13 +92,17 @@ From a status perspective, a switch looks the same as an update. There's a new d
 sudo bootc status
 ----
 ....
-Current staged image: node.bfsl9.gcp.redhatworkshops.io/caddy-wp
-    Image version: 9.20250326.0 (2025-04-10 13:38:12.835421182 UTC)
-    Image digest: sha256:54431e1daa50f82ebe11fc63b868537422e09f5c5f54ed5761893bfb974ec76c
-Current booted image: node.bfsl9.gcp.redhatworkshops.io/httpd
-    Image version: 9.20250326.0 (2025-04-10 13:33:46.181009833 UTC)
-    Image digest: sha256:fe3bcda02181be7aa8f49cf2f96915faeb9fd9fa5cc72e1146848f637e8d0a2d
-No rollback image present
+  Staged image: node.prk8w.gcp.redhatworkshops.io/caddy-wp
+        Digest: sha256:f139ae15566be551658c239eaadbdbc9ff3db72338cf41a7c85e5574903dad86
+       Version: 9.6 (2025-05-15 14:16:09.529889448 UTC)
+
+● Booted image: node.prk8w.gcp.redhatworkshops.io/httpd:10.0
+        Digest: sha256:5411c8f3d00f20ca500952b61a25d482a61e33d00df146f01c9aff28a2944400
+       Version: 10.0 (2025-05-15 13:57:13.220163203 UTC)
+
+  Rollback image: node.prk8w.gcp.redhatworkshops.io/httpd
+          Digest: sha256:daeb8ddb6ad93a842488b216d4816054db1f70b8f811adbb906e5d6b5634e65c
+         Version: 9.6 (2025-05-15 13:37:00.922495571 UTC)
 ....
 
 As usual, after the command is done you need to reboot the virtual machine
@@ -203,11 +207,11 @@ RUN dnf -y install lynx
 ADD wordpress-quadlet/etc/ /etc
 ADD wordpress-quadlet/usr/ /usr
 
-RUN <<EOF
+RUN <<EORUN
      set -euxo pipefail
      systemctl mask httpd.service 
      systemctl mask bootc-fetch-apply-updates.timer 
-EOF
+EORUN
 ----
 
 This means these services won't even be able to be started manually.
