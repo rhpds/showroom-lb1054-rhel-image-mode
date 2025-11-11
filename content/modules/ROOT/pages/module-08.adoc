@@ -315,4 +315,4 @@ Before proceeding, make sure you have logged out of the virtual machine:
 logout
 ----
 
-The prompt should look like `[lab-user@bastion ~]$ ` before continuing.
+The prompt should look like `[lab-user@bastion ~]$` before continuing.

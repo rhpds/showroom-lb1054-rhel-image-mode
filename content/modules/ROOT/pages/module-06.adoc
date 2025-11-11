@@ -355,7 +355,7 @@ Before proceeding, make sure you have logged out of the virtual machine:
 ----
 logout
 ----
-The prompt should look like `[lab-user@bastion ~]$ ` before continuing.
+The prompt should look like `[lab-user@bastion ~]$` before continuing.
 
 Making use of the tags in the catalog provides you with more options to control and trace your base images. To do the same with the packages you install on top of the base, you can use something like Satellite to control the visibility of new packages at build time. This combination can eliminate any drift between base images and installed packages from repositories.
 
