@@ -158,7 +158,7 @@ Starting automated install.Saving storage configuration...
 Deployment starting: /run/install/repo/container
 ....
 
-When prompted, hit `Enter` to finish the installation and shut down the VM
+When prompted, hit `Enter` to finish the installation and shut down the VM:
 ....
 Installation complete
 
@@ -198,7 +198,7 @@ Like with the previous virtual machine created, you can directly see if the http
 curl http://iso-vm
 ----
 
-The output should be "Hello Red Hat Summit 2025!!"
+The output should be "Hello Red Hat"
 
 You can now login to the virtual machine.
 
