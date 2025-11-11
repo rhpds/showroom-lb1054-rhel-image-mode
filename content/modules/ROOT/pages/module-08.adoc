@@ -249,7 +249,7 @@ It's important to note that not having the container image on the system doesn't
 
 So far in this lab, we have been using the `registry` transport, which requires network access. To manage updates in an offline manner, say for disconnected environments or those with intermittent connectivity, we could replicate the OCI transport and present an image at the same location. But we can also use the standard system storage locations with the `containers-storage` transport. A full discussion of transports and their associated uses and configuration is outside the scope of this lab. 
 
-For this lab, let's provide an update via standard system storage. We can use `skopeo` to copy images from one location to another. Here, we will use it to copy from the lab registry to the host, but it can also be used to copy to and from a USB drive or other media.
+For this lab, let's provide an update via standard system storage. We can use `skopeo` to copy images from one location to another. Here, we will use it to copy from the lab registry to the VM, but it can also be used to copy to and from a USB drive or other media.
 
 We need to be sure to use `sudo` to copy into the system storage location and not the user's.
 
