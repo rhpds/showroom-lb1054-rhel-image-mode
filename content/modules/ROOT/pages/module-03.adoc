@@ -170,7 +170,7 @@ Before we log into our VM, let's check the SHA256 digest of the image in the loc
 
 [source,bash,role="execute",subs=attributes+]
 ----
-skopeo inspect docker://{registry_hostname}/httpd | jq '.Digest'
+sudo skopeo inspect containers-storage:{registry_hostname}/httpd | jq '.Digest'
 ----
 ....
 "sha256:99694ce76cedd1fa58250c4e5ee6deeb4d91993b89054793394cda31b1d046ab"
