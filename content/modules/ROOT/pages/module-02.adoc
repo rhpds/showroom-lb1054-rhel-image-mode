@@ -55,13 +55,15 @@ RUN systemctl enable httpd.service
 Let's talk about the effects of these changes from the application container definition:
 
   * The `FROM` field is now pointing to the Red Hat Enterprise Linux 9.5 bootc image instead of the UBI base image. 
-  
-  This new bootc image is a complete version of RHEL 9.5, much like the KVM image available on the Customer Portal. This image includes all of the OS components to run as a host as well as the new `bootc` command. It is built using `ostree` to facilitate the transactional updates that marks an image mode deployment from a package mode host.
++ 
+This new bootc image is a complete version of RHEL 9.5, much like the KVM image available on the Customer Portal.
+This image includes all of the OS components to run as a host as well as the new `bootc` command.
+It is built using `ostree` to facilitate the transactional updates that marks an image mode deployment from a package mode host.
   
   * `RUN systemctl enable httpd.service` replaces the `ENTRYPOINT`.  
-
-  To start the `httpd` service at host startup as you use `systemctl` would with any other host. There's no 
-  need to specify an executable that should be run when a container engine like podman starts the container. 
++
+To start the `httpd` service at host startup as you use `systemctl` would with any other host.
+There's no need to specify an executable that should be run when a container engine like podman starts the container. 
 
 [#build]
 == Build the first bootc image
