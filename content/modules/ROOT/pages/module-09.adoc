@@ -160,6 +160,9 @@ Current rollback image: node.545jj.gcp.redhatworkshops.io/caddy-wp
     Image digest: sha256:c15b09203ea36a342135cc2d1c061ea96c0b61f4e5c46fd38bc8afe3f6c787a0
 ....
 
-Feel free to explore the virtual machine before moving on to the next section, remembering you are now `root`.
+Feel free to explore the virtual machine before moving on, remembering you are now `root`.
 
-You've completed the final exercise in the lab. You should have a good baseline for how image mode operates and how it might be of use in your environment. You can find more information about image mode in the Links section at the top of the page. Feel free to log out of the virtual machine and revisit any modules as well.
+You've completed the final exercise in the lab.
+You should have a good baseline for how image mode operates and how it might be of use in your environment.
+You can find more information about image mode in the Links section at the top of the page.
+Feel free to log out of the virtual machine and revisit any module as well.

@@ -133,12 +133,14 @@ You may be tempted to check the kernel version with something like `uname -r`, l
 [source,bash,role="execute",subs=attributes+]
 ----
 podman run --rm -i {registry_hostname}/base-check uname -r
+uname -r
 ----
 ....
-5.14.0-503.31.1.el9_5.x86_64
+5.14.0-570.52.1.el9_6.x86_64
+5.14.0-570.52.1.el9_6.x86_64
 ....
 
-Since this is a container, and not a VM, we will see the host's system kernel version not the one from the RPM list.
+Since this is a container, and not a VM, we will see two times the host's system kernel version not the one from the RPM list.
 
 This sort of local testing is often called the 'inner loop' in software development, something not previously available to the design and development of standard operating system builds. For some testing, you need to launch a container fully to get `systemd` started instead of running it interactively, like checking on the httpd service.
 
@@ -355,7 +357,7 @@ Before proceeding, make sure you have logged out of the virtual machine:
 ----
 logout
 ----
-The prompt should look like `[lab-user@bastion ~]$ ` before continuing.
+The prompt should look like `[lab-user@bastion ~]$` before continuing.
 
 Making use of the tags in the catalog provides you with more options to control and trace your base images. To do the same with the packages you install on top of the base, you can use something like Satellite to control the visibility of new packages at build time. This combination can eliminate any drift between base images and installed packages from repositories.
 

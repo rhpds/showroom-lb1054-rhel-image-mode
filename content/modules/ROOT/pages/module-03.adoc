@@ -31,10 +31,12 @@ cat ~/.ssh/{guid}key.pub; echo
 ....
 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAuXnpoluye+KM+9tvIAdHf+F0IHh+K73tlcjEG8LJRB
 ....
-NOTE: This is only a sample and this public key will not work in your environment
+
+NOTE: This is only a sample and this public key will not work in your environment.
+You need hence to select and copy the key _from your system's console_.
 
 You can now create a file called `config-qcow2.toml` with the following contents, replacing "SSHKEY" 
-in the `key` field with the contents of public key from your system.
+in the `key` field with the content of the public key from your system.
 
 [source,bash,role="execute",subs=attributes+]
 ----
@@ -67,6 +69,7 @@ podman image scp lab-user@localhost::{registry_hostname}/httpd
 Try to generate the image now:
 
 NOTE: This could take 2+ minutes to complete.
+You can safely ignore the spurious umount traceback error messages.
 
 [source,bash,role="execute",subs=attributes+]
 ----
@@ -167,7 +170,7 @@ Before we log into our VM, let's check the SHA256 digest of the image in the loc
 
 [source,bash,role="execute",subs=attributes+]
 ----
-skopeo inspect docker://{registry_hostname}/httpd | jq '.Digest'
+sudo skopeo inspect containers-storage:{registry_hostname}/httpd | jq '.Digest'
 ----
 ....
 "sha256:99694ce76cedd1fa58250c4e5ee6deeb4d91993b89054793394cda31b1d046ab"

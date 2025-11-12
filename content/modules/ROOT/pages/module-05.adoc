@@ -6,7 +6,7 @@ In this lab, you'll look at rollbacks and examine how bootc handles directories 
 == Rolling back changes to the virtual machine
 [NOTE] 
 ====
-You should still be logged into the bootc VM (the prompt should look like ` [{vm_user}@localhost ~]$`), if not log back in now.
+You should still be logged into the bootc VM (the prompt should look like `[{vm_user}@localhost ~]$`), if not log back in now:
 [source,bash,role="execute",subs=attributes+]
 ----
 ssh {vm_user}@qcow-vm
@@ -43,7 +43,6 @@ state then we can dig into what happened.
 sudo bootc rollback
 ----
 ....
-bootfs is sufficient for calculated new size: 0 bytes
 Next boot: rollback deployment
 ....
 
@@ -198,7 +197,7 @@ Remember that the update will detail what layers are new, removed, or added, but
 [#testing]
 == Testing the changes
 
-We can check for our new web page from the lab host (`[lab-user@bastion ~]$ `):
+We can check for our new web page from the lab host (`[lab-user@bastion ~]$`):
 
 [source,bash,role="execute",subs=attributes+]
 ----

@@ -16,6 +16,7 @@ asciidoc:
     ssh_command: ssh someone@example.com
     vm_user: core
     vm_user_pass: LB1054!
+    registry_hostname: node.GUID.example.com
     page-links:
     - url: https://red.ht/imagemode
       text: Learn more about image mode

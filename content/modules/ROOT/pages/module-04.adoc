@@ -135,6 +135,8 @@ Removed layers:   3     Size: 185.1 MB
 Added layers:     4     Size: 185.1 MB
 ....
 
+CAUTION: bootc might download all layers on first update due to issue https://github.com/bootc-dev/bootc/issues/1197[bootc-dev/bootc#1197].
+
 Let's check the current status of the host.
 [source,bash,role="execute",subs=attributes+]
 ----
